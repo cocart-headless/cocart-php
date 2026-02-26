@@ -1,0 +1,54 @@
+{
+    "name": "cocart-headless/cocart-php",
+    "description": "CoCart's Official PHP SDK",
+    "keywords": [
+        "cocart",
+        "woocommerce",
+        "cart",
+        "rest-api",
+        "sdk",
+        "headless",
+        "ecommerce"
+    ],
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "CoCart Headless, LLC",
+            "email": "support@cocartheadless.com"
+        }
+    ],
+    "homepage": "https://cocartapi.com",
+    "support": {
+        "issues": "https://github.com/cocart-headless/cocart-php/issues",
+        "source": "https://github.com/cocart-headless/cocart-php"
+    },
+    "require": {
+        "php": ">=8.1",
+        "ext-json": "*"
+    },
+    "suggest": {
+        "guzzlehttp/guzzle": "Recommended HTTP client for best performance (^7.0)"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.0",
+        "roave/security-advisories": "dev-latest"
+    },
+    "autoload": {
+        "psr-4": {
+            "CoCart\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "CoCart\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit"
+    },
+    "config": {
+        "sort-packages": true
+    },
+    "minimum-stability": "stable"
+}
