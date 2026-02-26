@@ -19,8 +19,6 @@ declare(strict_types=1);
  * @license MIT
  */
 
-namespace CoCart;
-
 use CoCart\Exceptions\CoCartException;
 use CoCart\Exceptions\AuthenticationException;
 use CoCart\Exceptions\ValidationException;
@@ -28,8 +26,12 @@ use CoCart\Endpoints\Cart;
 use CoCart\Endpoints\Products;
 use CoCart\Endpoints\Store;
 use CoCart\Endpoints\Sessions;
+use CoCart\Endpoints\Batch;
 use CoCart\Http\HttpAdapterInterface;
 use CoCart\Http\HttpAdapterFactory;
+use CoCart\CoCartInterface;
+use CoCart\Response;
+use CoCart\JwtManager;
 
 class CoCart implements CoCartInterface
 {
@@ -149,6 +151,16 @@ class CoCart implements CoCartInterface
     protected bool $verifySsl = true;
 
     /**
+     * Header name used for authentication (default: Authorization)
+     *
+     * Some hosting providers or reverse proxies strip the standard
+     * Authorization header. This allows using an alternative header name.
+     *
+     * @var string
+     */
+    protected string $authHeader = 'Authorization';
+
+    /**
      * Custom headers to send with requests
      *
      * @var array
@@ -205,6 +217,13 @@ class CoCart implements CoCartInterface
     protected ?Sessions $sessions = null;
 
     /**
+     * Batch endpoint instance
+     *
+     * @var Batch|null
+     */
+    protected ?Batch $batch = null;
+
+    /**
      * Constructor
      *
      * @param string $storeUrl The WooCommerce store URL
@@ -220,6 +239,7 @@ class CoCart implements CoCartInterface
      *                         - verify_ssl: bool (verify SSL certificates)
      *                         - rest_prefix: string (WordPress REST prefix, default 'wp-json')
      *                         - namespace: string (API namespace, default 'cocart')
+     *                         - auth_header: string (custom auth header name, default 'Authorization')
      *                         - headers: array (custom headers)
      *                         - http_adapter: string|HttpAdapterInterface (guzzle, curl, wordpress, stream, or instance)
      *                         - session_key: string (PHP session key for cart key storage, default 'cocart_cart_key')
@@ -269,6 +289,10 @@ class CoCart implements CoCartInterface
 
         if (isset($options['namespace'])) {
             $this->namespace = trim($options['namespace'], '/');
+        }
+
+        if (isset($options['auth_header'])) {
+            $this->authHeader = $options['auth_header'];
         }
 
         if (isset($options['headers'])) {
@@ -531,6 +555,31 @@ class CoCart implements CoCartInterface
     }
 
     /**
+     * Set the authentication header name
+     *
+     * Use this when the standard Authorization header is stripped by a
+     * reverse proxy or hosting provider (e.g. Cloudflare, Nginx, Apache).
+     *
+     * @param string $header Header name (e.g. 'X-Authorization')
+     * @return $this
+     */
+    public function setAuthHeader(string $header): static
+    {
+        $this->authHeader = $header;
+        return $this;
+    }
+
+    /**
+     * Get the authentication header name
+     *
+     * @return string
+     */
+    public function getAuthHeader(): string
+    {
+        return $this->authHeader;
+    }
+
+    /**
      * Add custom header
      *
      * @param string $name  Header name
@@ -708,6 +757,19 @@ class CoCart implements CoCartInterface
             $this->sessions = new Sessions($this);
         }
         return $this->sessions;
+    }
+
+    /**
+     * Get Batch endpoint (requires CoCart Plus)
+     *
+     * @return Batch
+     */
+    public function batch(): Batch
+    {
+        if ($this->batch === null) {
+            $this->batch = new Batch($this);
+        }
+        return $this->batch;
     }
 
     /**
@@ -1011,13 +1073,13 @@ class CoCart implements CoCartInterface
 
         // Add authentication
         if (!empty($this->jwtToken)) {
-            $headers['Authorization'] = 'Bearer ' . $this->jwtToken;
+            $headers[$this->authHeader] = 'Bearer ' . $this->jwtToken;
         } elseif (!empty($this->auth)) {
             $credentials = base64_encode($this->auth['username'] . ':' . $this->auth['password']);
-            $headers['Authorization'] = 'Basic ' . $credentials;
+            $headers[$this->authHeader] = 'Basic ' . $credentials;
         } elseif (!empty($this->consumerKey) && !empty($this->consumerSecret)) {
             $credentials = base64_encode($this->consumerKey . ':' . $this->consumerSecret);
-            $headers['Authorization'] = 'Basic ' . $credentials;
+            $headers[$this->authHeader] = 'Basic ' . $credentials;
         }
 
         // Add cart key header (alternative to query param)

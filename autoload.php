@@ -10,6 +10,9 @@
  * @package CoCart\SDK
  */
 
+// Load the main CoCart class (global namespace)
+require_once __DIR__ . '/src/CoCart.php';
+
 spl_autoload_register(function ($class) {
     // CoCart namespace prefix
     $prefix = 'CoCart\\';

@@ -31,13 +31,17 @@
         "guzzlehttp/guzzle": "Recommended HTTP client for best performance (^7.0)"
     },
     "require-dev": {
-        "phpunit/phpunit": "^10.0",
+        "mockery/mockery": "^1.6",
+        "pestphp/pest": "^3.0",
         "roave/security-advisories": "dev-latest"
     },
     "autoload": {
         "psr-4": {
             "CoCart\\": "src/"
-        }
+        },
+        "files": [
+            "src/CoCart.php"
+        ]
     },
     "autoload-dev": {
         "psr-4": {
@@ -45,10 +49,13 @@
         }
     },
     "scripts": {
-        "test": "phpunit"
+        "test": "pest"
     },
     "config": {
-        "sort-packages": true
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
     },
     "minimum-stability": "stable"
 }

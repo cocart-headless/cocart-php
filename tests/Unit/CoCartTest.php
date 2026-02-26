@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace CoCart\Tests\Unit;
 
-use CoCart\CoCart;
+use CoCart;
 use CoCart\Exceptions\AuthenticationException;
 use CoCart\Exceptions\CoCartException;
 use CoCart\Exceptions\ValidationException;
@@ -176,6 +176,52 @@ class CoCartTest extends TestCase
         $request = $this->mockAdapter->getLastRequest();
         $expected = 'Basic ' . base64_encode('ck_test:cs_test');
         $this->assertSame($expected, $request['headers']['Authorization']);
+    }
+
+    public function testCustomAuthHeaderWithBasicAuth(): void
+    {
+        $this->mockAdapter->queueResponse(200, [], '{}');
+
+        $client = $this->createClient([
+            'username' => 'admin',
+            'password' => 'secret',
+            'auth_header' => 'X-Authorization',
+        ]);
+        $client->get('cart');
+
+        $request = $this->mockAdapter->getLastRequest();
+        $expected = 'Basic ' . base64_encode('admin:secret');
+        $this->assertSame($expected, $request['headers']['X-Authorization']);
+        $this->assertArrayNotHasKey('Authorization', $request['headers']);
+    }
+
+    public function testCustomAuthHeaderWithJwt(): void
+    {
+        $this->mockAdapter->queueResponse(200, [], '{}');
+
+        $client = $this->createClient([
+            'jwt_token' => 'my.jwt.token',
+            'auth_header' => 'X-Authorization',
+        ]);
+        $client->get('cart');
+
+        $request = $this->mockAdapter->getLastRequest();
+        $this->assertSame('Bearer my.jwt.token', $request['headers']['X-Authorization']);
+        $this->assertArrayNotHasKey('Authorization', $request['headers']);
+    }
+
+    public function testSetAuthHeaderFluent(): void
+    {
+        $this->mockAdapter->queueResponse(200, [], '{}');
+
+        $client = $this->createClient(['username' => 'user', 'password' => 'pass']);
+        $result = $client->setAuthHeader('X-Auth');
+        $this->assertSame($client, $result);
+
+        $client->get('cart');
+        $request = $this->mockAdapter->getLastRequest();
+        $this->assertArrayHasKey('X-Auth', $request['headers']);
+        $this->assertArrayNotHasKey('Authorization', $request['headers']);
     }
 
     public function testSetAuthClearsJwt(): void

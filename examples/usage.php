@@ -12,7 +12,6 @@ require_once __DIR__ . '/../vendor/autoload.php';
 // require_once __DIR__ . '/../src/CoCart.php';
 // ... require other files
 
-use CoCart\CoCart;
 use CoCart\CoCartInterface;
 use CoCart\SessionManager;
 use CoCart\JwtManager;

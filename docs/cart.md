@@ -313,6 +313,58 @@ Get cross-sell product recommendations based on cart contents:
 $response = $client->cart()->getCrossSells();
 ```
 
+## Batch Requests
+
+> Requires the CoCart Plus plugin.
+
+Submit multiple write operations in a single HTTP request for better performance. Up to 25 operations per batch.
+
+```php
+$response = $client->batch()
+    ->add('cart/add-item', ['id' => '123', 'quantity' => '2'])
+    ->add('cart/add-item', ['id' => '456', 'quantity' => '1'])
+    ->add('cart/apply-coupon', ['coupon' => 'SAVE10'])
+    ->execute();
+```
+
+For cart-only requests, the server returns the final cart state with all notices merged.
+
+### Available Methods
+
+```php
+// Queue a POST request (default)
+$client->batch()->add('cart/add-item', ['id' => '123', 'quantity' => '1']);
+
+// Queue a PUT request
+$client->batch()->put('cart/item/abc123', ['quantity' => '5']);
+
+// Queue a DELETE request
+$client->batch()->remove('cart/item/abc123');
+```
+
+### Validation Mode
+
+```php
+// Require all requests to pass validation before any are executed
+$response = $client->batch()
+    ->setValidation('require-all-validate')
+    ->add('cart/add-item', ['id' => '123', 'quantity' => '1'])
+    ->add('cart/add-item', ['id' => '456', 'quantity' => '2'])
+    ->execute();
+```
+
+### Managing the Queue
+
+```php
+$batch = $client->batch();
+$batch->add('cart/add-item', ['id' => '123', 'quantity' => '1']);
+
+echo $batch->count(); // 1
+
+$batch->clear(); // Clear without executing
+echo $batch->count(); // 0
+```
+
 ## Working with Responses
 
 All cart methods return a `Response` object with cart-specific helpers:

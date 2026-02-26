@@ -17,6 +17,7 @@ use CoCart\Endpoints\Cart;
 use CoCart\Endpoints\Products;
 use CoCart\Endpoints\Store;
 use CoCart\Endpoints\Sessions;
+use CoCart\Endpoints\Batch;
 use CoCart\Http\HttpAdapterInterface;
 use CoCart\Exceptions\CoCartException;
 
@@ -286,6 +287,21 @@ interface CoCartInterface
     public function getNamespace(): string;
 
     /**
+     * Set the authentication header name
+     *
+     * @param string $header Header name (e.g. 'X-Authorization')
+     * @return static
+     */
+    public function setAuthHeader(string $header): static;
+
+    /**
+     * Get the authentication header name
+     *
+     * @return string
+     */
+    public function getAuthHeader(): string;
+
+    /**
      * Add custom header
      *
      * @param string $name  Header name
@@ -366,4 +382,11 @@ interface CoCartInterface
      * @return Sessions
      */
     public function sessions(): Sessions;
+
+    /**
+     * Get Batch endpoint (requires CoCart Plus)
+     *
+     * @return Batch
+     */
+    public function batch(): Batch;
 }

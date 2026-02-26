@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace CoCart\Tests\Unit;
 
-use CoCart\CoCart;
+use CoCart;
 use CoCart\JwtManager;
 use CoCart\Exceptions\AuthenticationException;
 use PHPUnit\Framework\TestCase;

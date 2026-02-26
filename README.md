@@ -1,6 +1,21 @@
 # CoCart PHP SDK
 
-A comprehensive PHP SDK for the [CoCart REST API](https://docs.cocartapi.com), enabling frontend cart management for WooCommerce headless stores.
+[![Tests](https://img.shields.io/github/actions/workflow/status/cocart-headless/cocart-php/tests.yml?label=tests&style=for-the-badge&labelColor=000000)](https://github.com/cocart-headless/cocart-php/actions/workflows/tests.yml)
+[![Packagist Downloads](https://img.shields.io/packagist/dt/cocart-headless/cocart-php?style=for-the-badge&labelColor=000000)](https://packagist.org/packages/cocart-headless/cocart-php)
+[![Packagist Version](https://img.shields.io/packagist/v/cocart-headless/cocart-php?style=for-the-badge&labelColor=000000)](https://packagist.org/packages/cocart-headless/cocart-php)
+[![License](https://img.shields.io/github/license/jayanratna/resend-php?color=9cf&style=for-the-badge&labelColor=000000)](https://github.com/cocart-headless/cocart-php/blob/main/LICENSE)
+
+---
+
+The Official PHP SDK for the [CoCart REST API](https://docs.cocartapi.com).
+
+> ⚠️ Supports API v2 ONLY! No legacy API supported.
+
+## TODO to complete the SDK
+
+* [ ] Add SDK docs to documentation site
+* [ ] Add SEO Pack extension support
+* [ ] Add Checkout API support
 
 ## Features
 
@@ -9,8 +24,8 @@ A comprehensive PHP SDK for the [CoCart REST API](https://docs.cocartapi.com), e
 - Authenticated user support (Basic Auth & JWT)
 - JWT token lifecycle (login, refresh, validate, auto-refresh)
 - Session management and cart transfer on login
-- Products API integration
-- Store information API
+- Fetch products easy, search and filter results
+- Batch requests — multiple operations in a single HTTP call
 - Sessions management (admin)
 - Multiple storage adapters for cart key and token persistence
 - Multiple HTTP adapters (Guzzle, cURL, WordPress HTTP API, PHP Streams)
@@ -38,25 +53,10 @@ See [Installation Guide](docs/installation.md) for manual install, HTTP adapter 
 ## Quick Start
 
 ```php
-use CoCart\CoCart;
-
 // Guest customer — cart key is persisted to PHP session automatically
 $client = new CoCart('https://your-store.com');
 $client->cart()->addItem(123, 2);
 $cart = $client->cart()->get();
-
-// Authenticated customer
-$client = new CoCart('https://your-store.com', [
-    'username' => 'customer@email.com',
-    'password' => 'password',
-]);
-$cart = $client->cart()->get();
-
-// Fluent interface
-$cart = CoCart::create('https://your-store.com')
-    ->setAuth('customer@email.com', 'password')
-    ->cart()
-    ->get();
 ```
 
 ## Documentation
@@ -74,19 +74,20 @@ $cart = CoCart::create('https://your-store.com')
 
 ```php
 $client = new CoCart('https://your-store.com', [
-    'cart_key'        => 'existing_cart_key',      // Guest session
-    'username'        => 'customer@email.com',     // Basic Auth
-    'password'        => 'password',
-    'jwt_token'       => 'your-jwt-token',         // JWT Auth
+    'cart_key'          => 'existing_cart_key',      // Guest session
+    'username'          => 'customer@email.com',     // Basic Auth
+    'password'          => 'password',
+    'jwt_token'         => 'your-jwt-token',         // JWT Auth
     'jwt_refresh_token' => 'your-refresh-token',
-    'consumer_key'    => 'ck_xxxxx',               // Admin (Sessions API)
-    'consumer_secret' => 'cs_xxxxx',
-    'timeout'         => 30,                       // HTTP settings
-    'verify_ssl'      => true,
-    'rest_prefix'     => 'wp-json',                // Custom REST prefix
-    'namespace'       => 'cocart',                 // Custom namespace
-    'auto_storage'    => true,                     // Auto-persist cart key to $_SESSION
-    'session_key'     => 'cocart_cart_key',        // Session key name
+    'consumer_key'      => 'ck_xxxxx',               // Admin (Sessions API)
+    'consumer_secret'   => 'cs_xxxxx',
+    'auth_header'       => 'Authorization',            // Custom auth header for proxies
+    'timeout'           => 30,                       // HTTP settings
+    'verify_ssl'        => true,
+    'rest_prefix'       => 'wp-json',                // Custom REST prefix
+    'namespace'         => 'cocart',                 // Custom namespace - Only supported if you have the WhiteLabel add-on
+    'auto_storage'      => true,                     // Auto-persist cart key to $_SESSION
+    'session_key'       => 'cocart_cart_key',        // Session key name
 ]);
 ```
 
@@ -94,12 +95,8 @@ $client = new CoCart('https://your-store.com', [
 
 MIT License - see [LICENSE](LICENSE) file for details.
 
-## Contributing
-
-Contributions are welcome! Please read our contributing guidelines before submitting pull requests.
-
 ## Support
 
 - [CoCart Documentation](https://docs.cocartapi.com)
 - [CoCart Discord Community](https://cocartapi.com/community)
-- [GitHub Issues](https://github.com/cocart-headless/cocart-sdk-php/issues)
+- [GitHub Issues](https://github.com/cocart-headless/cocart-php/issues)

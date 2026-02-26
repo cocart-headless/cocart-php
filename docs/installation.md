@@ -8,7 +8,7 @@
   - **cURL extension**: Built into most PHP installations
   - **PHP Streams**: Works with `allow_url_fopen` enabled (fallback)
 - CoCart plugin installed on your WooCommerce store
-- [CoCart JWT Authentication](https://cocartapi.com) plugin for JWT features (optional)
+- [CoCart JWT Authentication](https://wordpress.org/plugins/cocart-jwt-authentication/) plugin for JWT features (optional)
 
 ## Via Composer (Recommended)
 
@@ -43,7 +43,7 @@ The SDK automatically selects the best available HTTP adapter in this order:
 ### Specifying an Adapter
 
 ```php
-use CoCart\CoCart;
+
 use CoCart\Http\GuzzleAdapter;
 
 // Auto-detect best available adapter (default)
@@ -72,7 +72,7 @@ print_r(CoCart::getAvailableHttpAdapters());
 ### Configuring Guzzle
 
 ```php
-use CoCart\CoCart;
+
 use CoCart\Http\GuzzleAdapter;
 use GuzzleHttp\Client;
 

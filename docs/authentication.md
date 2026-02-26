@@ -11,8 +11,6 @@ No authentication is needed for guest cart operations. The SDK automatically man
 3. **Subsequent requests within the same script** — The stored cart key is sent as both a `Cart-Key` header and a `cart_key` query parameter, so the server knows which cart to use.
 
 ```php
-use CoCart\CoCart;
-
 $client = new CoCart('https://your-store.com');
 
 // First page load — add item, cart key is persisted to PHP session automatically
@@ -75,13 +73,11 @@ $client->isGuest();         // false
 
 ## JWT Authentication
 
-If the [CoCart JWT Authentication](https://cocartapi.com) plugin (v3.0+) is installed, `login()` acquires JWT tokens automatically. If not, the SDK falls back to Basic Auth — so `login()` always works regardless of your server setup.
+If the [CoCart JWT Authentication](https://wordpress.org/plugins/cocart-jwt-authentication/) plugin (v3.0+) is installed, `login()` acquires JWT tokens automatically. If not, the SDK falls back to Basic Auth — so `login()` always works regardless of your server setup.
 
 ### Login
 
 ```php
-use CoCart\CoCart;
-
 $client = new CoCart('https://your-store.com');
 
 // Login — uses JWT if available, falls back to Basic Auth
@@ -255,6 +251,37 @@ JWT endpoints also respect the namespace automatically:
 ```php
 // Refresh calls: {rest_prefix}/{namespace}/jwt/refresh-token
 // Validate calls: {rest_prefix}/{namespace}/jwt/validate-token
+```
+
+## Custom Auth Header
+
+Some hosting providers or reverse proxies (Cloudflare, Nginx, Apache) strip or block the standard `Authorization` header. You can configure the SDK to use an alternative header name:
+
+```php
+// Via constructor
+$client = new CoCart('https://your-store.com', [
+    'username' => 'customer@email.com',
+    'password' => 'password',
+    'auth_header' => 'X-Authorization',
+]);
+
+// Or at runtime
+$client->setAuthHeader('X-Authorization');
+```
+
+The SDK will send credentials using the custom header instead:
+
+```http
+X-Authorization: Basic dXNlcjpwYXNz
+X-Authorization: Bearer eyJ...
+```
+
+Your WordPress server must be configured to read the custom header. For example, in `.htaccess`:
+
+```apache
+RewriteEngine On
+RewriteCond %{HTTP:X-Authorization} ^(.+)$
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:X-Authorization}]
 ```
 
 ## Testing with Mocks

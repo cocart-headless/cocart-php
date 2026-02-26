@@ -5,8 +5,6 @@
 The Sessions endpoint is for administrators to manage cart sessions server-side. It requires WooCommerce REST API credentials.
 
 ```php
-use CoCart\CoCart;
-
 $client = new CoCart('https://your-store.com', [
     'consumer_key' => 'ck_xxxxx',
     'consumer_secret' => 'cs_xxxxx',
@@ -57,7 +55,6 @@ The `SessionManager` class handles cart sessions for frontend applications — t
 ### Basic Setup
 
 ```php
-use CoCart\CoCart;
 use CoCart\SessionManager;
 use CoCart\Storage\PhpSessionStorage;
 
@@ -228,7 +225,6 @@ $jwt = new JwtManager($client, $storage);
 A common flow for headless stores: the guest browses and adds items, then logs in and their cart transfers to their account.
 
 ```php
-use CoCart\CoCart;
 use CoCart\SessionManager;
 use CoCart\Storage\PhpSessionStorage;
 
