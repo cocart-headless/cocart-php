@@ -24,7 +24,7 @@
         "source": "https://github.com/cocart-headless/cocart-php"
     },
     "require": {
-        "php": ">=8.1",
+        "php": ">=8.2",
         "ext-json": "*"
     },
     "suggest": {
