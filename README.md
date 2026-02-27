@@ -70,6 +70,8 @@ $cart = $client->cart()->get();
 | [Products](docs/products.md) | List/search/filter products, pagination, variations, categories, tags, attributes, reviews |
 | [Sessions](docs/sessions.md) | Admin sessions API, SessionManager, storage adapters, cart transfer on login |
 | [Error Handling](docs/error-handling.md) | Exception hierarchy, catching errors, HTTP status mapping, response error helpers |
+| [Utilities](docs/utilities.md) | Currency and timezone utilities helpers that operate
+on data already returned by the API. |
 
 ## Configuration
 
@@ -82,12 +84,12 @@ $client = new CoCart('https://your-store.com', [
     'jwt_refresh_token' => 'your-refresh-token',
     'consumer_key'      => 'ck_xxxxx',               // Admin (Sessions API)
     'consumer_secret'   => 'cs_xxxxx',
-    'auth_header'       => 'Authorization',            // Custom auth header for proxies
+    'auth_header'       => 'Authorization',          // Custom auth header for proxies
     'timeout'           => 30,                       // HTTP settings
     'verify_ssl'        => true,
     'rest_prefix'       => 'wp-json',                // Custom REST prefix
     'namespace'         => 'cocart',                 // Custom namespace - Only supported if you have the WhiteLabel add-on
-    'etag'              => true,                       // ETag conditional requests (default true)
+    'etag'              => true,                     // ETag conditional requests (default true)
     'auto_storage'      => true,                     // Auto-persist cart key to $_SESSION
     'session_key'       => 'cocart_cart_key',        // Session key name
 ]);
