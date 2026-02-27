@@ -93,7 +93,7 @@ $cart = $client->cart()->get();
 ### Logout
 
 ```php
-$client->logout(); // Clears JWT and refresh tokens
+$client->logout(); // Calls server logout endpoint, then clears local JWT and refresh tokens
 ```
 
 ### Refresh an Expired Token

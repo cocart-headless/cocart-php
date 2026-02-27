@@ -600,4 +600,31 @@ class CoCartTest extends TestCase
 
         $this->assertSame('custom_key', $client->getCartKey());
     }
+
+    // --- Logout ---
+
+    public function testLogoutCallsServerEndpoint(): void
+    {
+        // Queue response for the POST logout call
+        $this->mockAdapter->queueResponse(200, [], '{}');
+
+        $client = $this->createClient(['jwt_token' => 'my.jwt.token']);
+        $client->logout();
+
+        $request = $this->mockAdapter->getLastRequest();
+        $this->assertSame('POST', $request['method']);
+        $this->assertStringContainsString('/logout', $request['url']);
+    }
+
+    public function testLogoutClearsTokensEvenIfServerFails(): void
+    {
+        // Queue a server error for the logout call
+        $this->mockAdapter->queueResponse(500, [], '{"code":"server_error","message":"fail"}');
+
+        $client = $this->createClient(['jwt_token' => 'my.jwt.token']);
+        $client->logout();
+
+        // Tokens should still be cleared locally
+        $this->assertFalse($client->isAuthenticated());
+    }
 }

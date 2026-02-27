@@ -60,6 +60,18 @@ class Products extends Endpoint
     }
 
     /**
+     * Get a single product by slug
+     *
+     * @param string $slug   Product URL slug
+     * @param array  $params Query parameters
+     * @return Response
+     */
+    public function findBySlug(string $slug, array $params = []): Response
+    {
+        return $this->get($slug, $params);
+    }
+
+    /**
      * Search products
      *
      * @param string $term   Search term
@@ -291,6 +303,56 @@ class Products extends Endpoint
     }
 
     /**
+     * Get a single attribute term by ID
+     *
+     * @param int   $attributeId Attribute ID
+     * @param int   $termId      Term ID
+     * @param array $params      Query parameters
+     * @return Response
+     */
+    public function attributeTerm(int $attributeId, int $termId, array $params = []): Response
+    {
+        return $this->get("attributes/{$attributeId}/terms/{$termId}", $params);
+    }
+
+    /**
+     * Get a single attribute by slug
+     *
+     * @param string $slug   Attribute slug
+     * @param array  $params Query parameters
+     * @return Response
+     */
+    public function attributeBySlug(string $slug, array $params = []): Response
+    {
+        return $this->get("attributes/{$slug}", $params);
+    }
+
+    /**
+     * Get attribute terms by attribute slug
+     *
+     * @param string $slug   Attribute slug
+     * @param array  $params Query parameters
+     * @return Response
+     */
+    public function attributeTermsBySlug(string $slug, array $params = []): Response
+    {
+        return $this->get("attributes/{$slug}/terms", $params);
+    }
+
+    /**
+     * Get a single attribute term by attribute slug and term slug
+     *
+     * @param string $attributeSlug Attribute slug
+     * @param string $termSlug      Term slug
+     * @param array  $params        Query parameters
+     * @return Response
+     */
+    public function attributeTermBySlug(string $attributeSlug, string $termSlug, array $params = []): Response
+    {
+        return $this->get("attributes/{$attributeSlug}/terms/{$termSlug}", $params);
+    }
+
+    /**
      * Get product brands
      *
      * @param array $params Query parameters
@@ -376,6 +438,17 @@ class Products extends Endpoint
     {
         $params['product'] = $productId;
         return $this->reviews($params);
+    }
+
+    /**
+     * Get reviews written by the authenticated user
+     *
+     * @param array $params Query parameters
+     * @return Response
+     */
+    public function myReviews(array $params = []): Response
+    {
+        return $this->get('reviews/mine', $params);
     }
 
 }

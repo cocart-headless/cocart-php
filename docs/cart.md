@@ -9,6 +9,17 @@ The Cart API handles all shopping cart operations.
 $cart = $client->cart();
 ```
 
+## Create Cart
+
+Create a new guest cart session and get a `cart_key` without adding any items:
+
+```php
+$response = $client->cart()->create();
+$cartKey = $response->get('cart_key'); // 'guest_abc123...'
+```
+
+> **Note:** Only available for non-authenticated (guest) users.
+
 ## Get Cart
 
 ```php
@@ -20,6 +31,20 @@ $response = $client->cart()->get([
     'thumb' => 'true',           // Include product thumbnails
     'default' => 'true',         // Return default cart data
 ]);
+```
+
+## Get Items
+
+Get only the items in the cart (lighter than fetching the full cart):
+
+```php
+$response = $client->cart()->getItems();
+```
+
+### Get a Single Item
+
+```php
+$response = $client->cart()->getItem('abc123def456...');
 ```
 
 ## Adding Items

@@ -728,6 +728,13 @@ class CoCart implements CoCartInterface
      */
     public function logout(): static
     {
+        // Call the server logout endpoint to invalidate the session
+        try {
+            $this->post('logout');
+        } catch (\Throwable $e) {
+            // Continue even if server call fails — always clear local tokens
+        }
+
         $this->jwt()->clearTokens();
         return $this;
     }

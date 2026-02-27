@@ -182,6 +182,8 @@ do {
 
 ## Single Product
 
+### By ID
+
 ```php
 $response = $client->products()->find(123);
 
@@ -189,6 +191,12 @@ $data = $response->toArray();
 echo $data['name'];
 echo $data['price'];
 echo $data['description'];
+```
+
+### By Slug
+
+```php
+$response = $client->products()->findBySlug('blue-hoodie');
 ```
 
 ## Variations
@@ -252,11 +260,30 @@ $response = $client->products()->attributes();
 $response = $client->products()->attribute(1);
 ```
 
+### Get a Single Attribute by Slug
+
+```php
+$response = $client->products()->attributeBySlug('color');
+```
+
 ### Get Attribute Terms
 
 ```php
 // Get all terms for attribute ID 1 (e.g., all colors)
 $response = $client->products()->attributeTerms(1);
+
+// By attribute slug
+$response = $client->products()->attributeTermsBySlug('color');
+```
+
+### Get a Single Attribute Term
+
+```php
+// By attribute ID and term ID
+$response = $client->products()->attributeTerm(1, 5);
+
+// By attribute slug and term slug
+$response = $client->products()->attributeTermBySlug('color', 'blue');
 ```
 
 ## Brands
@@ -299,6 +326,14 @@ $response = $client->products()->reviews();
 
 ```php
 $response = $client->products()->productReviews(123);
+```
+
+### My Reviews
+
+Get reviews written by the authenticated user:
+
+```php
+$response = $client->products()->myReviews();
 ```
 
 ## SEO Data

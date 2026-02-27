@@ -45,7 +45,8 @@ class Sessions extends Endpoint
      */
     public function find(string $sessionKey, array $params = []): Response
     {
-        return $this->get($sessionKey, $params);
+        // CoCart Core uses singular "session" for individual session routes
+        return $this->client->get("session/{$sessionKey}", $params);
     }
 
     /**
@@ -56,7 +57,8 @@ class Sessions extends Endpoint
      */
     public function destroy(string $sessionKey): Response
     {
-        return $this->delete($sessionKey);
+        // CoCart Core uses singular "session" for individual session routes
+        return $this->client->delete("session/{$sessionKey}");
     }
 
     /**
@@ -67,7 +69,8 @@ class Sessions extends Endpoint
      */
     public function getItems(string $sessionKey): Response
     {
-        return $this->get("{$sessionKey}/items");
+        // CoCart Core uses singular "session" for individual session routes
+        return $this->client->get("session/{$sessionKey}/items");
     }
 
     /**

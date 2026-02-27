@@ -43,6 +43,44 @@ class Cart extends Endpoint
     }
 
     /**
+     * Create a new guest cart session
+     *
+     * Generates a fresh cart_key without adding any items.
+     * Only available for non-authenticated (guest) users.
+     *
+     * @return Response
+     */
+    public function create(): Response
+    {
+        return $this->post('');
+    }
+
+    /**
+     * Get all items in the cart
+     *
+     * Returns only the items array (lighter than fetching the full cart).
+     *
+     * @param array $params Query parameters
+     * @return Response
+     */
+    public function getItems(array $params = []): Response
+    {
+        return parent::get('items', $params);
+    }
+
+    /**
+     * Get a single item from the cart by its item key
+     *
+     * @param string $itemKey The cart item key
+     * @param array  $params  Query parameters
+     * @return Response
+     */
+    public function getItem(string $itemKey, array $params = []): Response
+    {
+        return parent::get("item/{$itemKey}", $params);
+    }
+
+    /**
      * Add an item to the cart
      *
      * @param string|int $productId   Product ID or variation ID
