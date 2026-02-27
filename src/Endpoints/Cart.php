@@ -33,8 +33,12 @@ class Cart extends Endpoint
      *                      - thumb: bool (include product thumbnails)
      * @return Response
      */
-    public function get(array $params = []): Response
+    public function get(string $path = '', array $params = []): Response
     {
+        if ($path !== '') {
+            return parent::get($path, $params);
+        }
+
         return $this->client->get($this->endpoint, $params);
     }
 
