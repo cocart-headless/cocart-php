@@ -29,13 +29,14 @@ The Official PHP SDK for the [CoCart REST API](https://docs.cocartapi.com).
 - Multiple storage adapters for cart key and token persistence
 - Multiple HTTP adapters (Guzzle, cURL, WordPress HTTP API, PHP Streams)
 - `CoCartInterface` for easy mocking in tests
+- ETag conditional requests for reduced bandwidth (enabled by default)
 - Comprehensive error handling
 - PSR-4 autoloading
 
 ## Requirements
 
-- PHP 8.1 or higher
-- CoCart plugin installed on your WooCommerce store
+- PHP 8.2 or higher
+- CoCart Basic plugin installed on your WooCommerce store
 - One of: Guzzle (recommended), cURL, or PHP Streams
 
 ## Installation
@@ -85,6 +86,7 @@ $client = new CoCart('https://your-store.com', [
     'verify_ssl'        => true,
     'rest_prefix'       => 'wp-json',                // Custom REST prefix
     'namespace'         => 'cocart',                 // Custom namespace - Only supported if you have the WhiteLabel add-on
+    'etag'              => true,                       // ETag conditional requests (default true)
     'auto_storage'      => true,                     // Auto-persist cart key to $_SESSION
     'session_key'       => 'cocart_cart_key',        // Session key name
 ]);

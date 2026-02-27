@@ -340,6 +340,38 @@ class Response implements \ArrayAccess
         return $this->get('cross_sells', []);
     }
 
+    // --- ETag / Cache helpers ---
+
+    /**
+     * Get ETag header from response
+     *
+     * @return string|null
+     */
+    public function getETag(): ?string
+    {
+        return $this->getHeader('ETag');
+    }
+
+    /**
+     * Check if response is 304 Not Modified
+     *
+     * @return bool
+     */
+    public function isNotModified(): bool
+    {
+        return $this->statusCode === 304;
+    }
+
+    /**
+     * Get CoCart cache status header (HIT, MISS, or SKIP)
+     *
+     * @return string|null
+     */
+    public function getCacheStatus(): ?string
+    {
+        return $this->getHeader('CoCart-Cache');
+    }
+
     // --- Pagination helpers (WP REST API standard headers) ---
 
     /**

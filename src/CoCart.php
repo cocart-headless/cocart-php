@@ -161,6 +161,20 @@ class CoCart implements CoCartInterface
     protected string $authHeader = 'Authorization';
 
     /**
+     * Whether ETag conditional requests are enabled
+     *
+     * @var bool
+     */
+    protected bool $etagEnabled = true;
+
+    /**
+     * In-memory ETag cache (URL → ETag value)
+     *
+     * @var array<string, string>
+     */
+    protected array $etagCache = [];
+
+    /**
      * Custom headers to send with requests
      *
      * @var array
@@ -245,6 +259,7 @@ class CoCart implements CoCartInterface
      *                         - session_key: string (PHP session key for cart key storage, default 'cocart_cart_key')
      *                         - auto_storage: bool (auto-persist cart key to $_SESSION, default true)
      *                         - max_retries: int (retry transient failures up to N times, default 0)
+     *                         - etag: bool (enable ETag conditional requests, default true)
      */
     public function __construct(string $storeUrl, array $options = [])
     {
@@ -309,6 +324,10 @@ class CoCart implements CoCartInterface
 
         if (isset($options['max_retries'])) {
             $this->maxRetries = max(0, (int) $options['max_retries']);
+        }
+
+        if (isset($options['etag'])) {
+            $this->etagEnabled = (bool) $options['etag'];
         }
 
         // Set HTTP adapter
@@ -589,6 +608,32 @@ class CoCart implements CoCartInterface
     public function addHeader(string $name, string $value): static
     {
         $this->customHeaders[$name] = $value;
+        return $this;
+    }
+
+    /**
+     * Enable or disable ETag conditional requests
+     *
+     * When enabled, the SDK automatically stores ETags from responses
+     * and sends If-None-Match on subsequent GET requests.
+     *
+     * @param bool $enabled Whether to enable ETag support
+     * @return $this
+     */
+    public function setETag(bool $enabled): static
+    {
+        $this->etagEnabled = $enabled;
+        return $this;
+    }
+
+    /**
+     * Clear all cached ETags
+     *
+     * @return $this
+     */
+    public function clearETagCache(): static
+    {
+        $this->etagCache = [];
         return $this;
     }
 
@@ -930,6 +975,12 @@ class CoCart implements CoCartInterface
             'verify_ssl' => $this->verifySsl,
         ];
 
+        // Add If-None-Match header for GET requests when ETag is cached
+        $skipCache = isset($params['_skip_cache']) && $params['_skip_cache'];
+        if ($this->etagEnabled && $method === 'GET' && !$skipCache && isset($this->etagCache[$url])) {
+            $headers['If-None-Match'] = $this->etagCache[$url];
+        }
+
         $attempt = 0;
 
         while (true) {
@@ -959,6 +1010,14 @@ class CoCart implements CoCartInterface
 
             // Extract cart key from response headers for guest sessions
             $this->extractCartKeyFromHeaders($this->lastResponse);
+
+            // Store ETag from response for future conditional requests
+            if ($this->etagEnabled && $method === 'GET') {
+                $etag = $this->lastResponse->getETag();
+                if ($etag !== null) {
+                    $this->etagCache[$url] = $etag;
+                }
+            }
 
             // Retry on transient HTTP status codes (429, 503)
             if ($attempt < $this->maxRetries && $this->isRetryableStatus($httpResponse->statusCode)) {

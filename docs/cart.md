@@ -404,4 +404,48 @@ $data = $response->toArray();
 $json = $response->toJson();
 ```
 
+## ETag / Conditional Requests
+
+The SDK automatically handles ETags for reduced bandwidth and faster responses. This is enabled by default.
+
+When a response includes an `ETag` header, the SDK stores it in memory. On subsequent GET requests to the same URL, the SDK sends the stored ETag via the `If-None-Match` header. If the data hasn't changed, the server returns a `304 Not Modified` response with an empty body instead of the full payload.
+
+```php
+$client = new CoCart('https://your-store.com');
+
+// First request — full response with ETag
+$response = $client->cart()->get();
+$etag = $response->getETag();           // e.g. W/"abc123"
+$cache = $response->getCacheStatus();   // "MISS"
+
+// Second request — SDK sends If-None-Match automatically
+$response = $client->cart()->get();
+
+if ($response->isNotModified()) {
+    // 304 — cart hasn't changed, use your cached data
+    $cache = $response->getCacheStatus(); // "HIT"
+}
+```
+
+### Skipping the Cache
+
+Pass `_skip_cache` to force a fresh response:
+
+```php
+$response = $client->cart()->get(['_skip_cache' => true]);
+```
+
+### Disabling ETags
+
+```php
+// Via constructor
+$client = new CoCart('https://your-store.com', ['etag' => false]);
+
+// Or at runtime
+$client->setETag(false);
+
+// Clear stored ETags without disabling
+$client->clearETagCache();
+```
+
 See [Error Handling](error-handling.md) for handling API errors.

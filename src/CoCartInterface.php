@@ -311,6 +311,21 @@ interface CoCartInterface
     public function addHeader(string $name, string $value): static;
 
     /**
+     * Enable or disable ETag conditional requests
+     *
+     * @param bool $enabled Whether to enable ETag support
+     * @return static
+     */
+    public function setETag(bool $enabled): static;
+
+    /**
+     * Clear all cached ETags
+     *
+     * @return static
+     */
+    public function clearETagCache(): static;
+
+    /**
      * Set the HTTP adapter to use
      *
      * @param HttpAdapterInterface|string $adapter Adapter instance or name (guzzle, curl, wordpress, stream)
