@@ -28,7 +28,8 @@
         "ext-json": "*"
     },
     "suggest": {
-        "guzzlehttp/guzzle": "Recommended HTTP client for best performance (^7.0)"
+        "guzzlehttp/guzzle": "Recommended HTTP client for best performance (^7.0)",
+        "ext-intl": "Enables locale-aware currency formatting in CurrencyFormatter"
     },
     "require-dev": {
         "mockery/mockery": "^1.6",
