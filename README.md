@@ -70,8 +70,7 @@ $cart = $client->cart()->get();
 | [Products](docs/products.md) | List/search/filter products, pagination, variations, categories, tags, attributes, reviews |
 | [Sessions](docs/sessions.md) | Admin sessions API, SessionManager, storage adapters, cart transfer on login |
 | [Error Handling](docs/error-handling.md) | Exception hierarchy, catching errors, HTTP status mapping, response error helpers |
-| [Utilities](docs/utilities.md) | Currency and timezone utilities helpers that operate
-on data already returned by the API. |
+| [Utilities](docs/utilities.md) | Currency and timezone utilities helpers that operate on data already returned by the API. |
 
 ## Configuration
 
