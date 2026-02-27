@@ -94,7 +94,7 @@ class BatchTest extends TestCase
 
         $client = $this->createClient();
         $client->batch()
-            ->put('cart/item/abc123', ['quantity' => '5'])
+            ->update('cart/item/abc123', ['quantity' => '5'])
             ->remove('cart/item/def456')
             ->execute();
 
@@ -201,7 +201,7 @@ class BatchTest extends TestCase
 
         $result = $batch
             ->add('cart/add-item', ['id' => '123', 'quantity' => '1'])
-            ->put('cart/item/abc', ['quantity' => '3'])
+            ->update('cart/item/abc', ['quantity' => '3'])
             ->remove('cart/item/def');
 
         $this->assertSame($batch, $result);

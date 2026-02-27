@@ -336,7 +336,7 @@ For cart-only requests, the server returns the final cart state with all notices
 $client->batch()->add('cart/add-item', ['id' => '123', 'quantity' => '1']);
 
 // Queue a PUT request
-$client->batch()->put('cart/item/abc123', ['quantity' => '5']);
+$client->batch()->update('cart/item/abc123', ['quantity' => '5']);
 
 // Queue a DELETE request
 $client->batch()->remove('cart/item/abc123');

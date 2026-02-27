@@ -58,7 +58,7 @@ class Batch extends Endpoint
      * @param array  $body Request body data
      * @return static
      */
-    public function put(string $path, array $body = []): static
+    public function update(string $path, array $body = []): static
     {
         return $this->queue('PUT', $path, $body);
     }
