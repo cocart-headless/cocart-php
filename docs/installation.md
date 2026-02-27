@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- PHP 8.1 or higher
+- PHP 8.2 or higher
 - One of the following HTTP clients:
   - **Guzzle** (recommended): `composer require guzzlehttp/guzzle`
   - **cURL extension**: Built into most PHP installations
@@ -151,6 +151,9 @@ $client = new CoCart('https://your-store.com', [
     'timeout' => 30,
     'verify_ssl' => true,
 
+    // Custom auth header (for reverse proxies that strip Authorization)
+    'auth_header' => 'Authorization',
+
     // REST API prefix (default: 'wp-json')
     'rest_prefix' => 'wp-json',
 
@@ -159,6 +162,9 @@ $client = new CoCart('https://your-store.com', [
 
     // Retry transient failures (429, 503, timeouts)
     'max_retries' => 2,
+
+    // ETag conditional requests (default: true)
+    'etag' => true,
 
     // Cart key persistence (default: true, uses $_SESSION)
     'auto_storage' => true,
@@ -175,5 +181,7 @@ $client = CoCart::create('https://your-store.com')
     ->setMaxRetries(2)
     ->setRestPrefix('api')
     ->setNamespace('mystore')
+    ->setAuthHeader('X-Authorization')
+    ->setETag(true)
     ->addHeader('X-Custom-Header', 'value');
 ```

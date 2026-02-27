@@ -73,14 +73,14 @@ $client->isGuest();         // false
 
 ## JWT Authentication
 
-If the [CoCart JWT Authentication](https://wordpress.org/plugins/cocart-jwt-authentication/) plugin (v3.0+) is installed, `login()` acquires JWT tokens automatically. If not, the SDK falls back to Basic Auth — so `login()` always works regardless of your server setup.
+If the [CoCart JWT Authentication](https://wordpress.org/plugins/cocart-jwt-authentication/) plugin (v3.0+) is installed, `login()` acquires JWT tokens automatically. If the plugin is not installed, `login()` throws an `AuthenticationException`. For stores without JWT, use Basic Auth directly via `setAuth()`.
 
 ### Login
 
 ```php
 $client = new CoCart('https://your-store.com');
 
-// Login — uses JWT if available, falls back to Basic Auth
+// Login — acquires JWT tokens (requires CoCart JWT Authentication plugin)
 $response = $client->login('customer@email.com', 'password');
 
 echo $response->get('display_name'); // 'john'
