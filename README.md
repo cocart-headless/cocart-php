@@ -14,7 +14,6 @@ The Official PHP SDK for the [CoCart REST API](https://docs.cocartapi.com).
 ## TODO to complete the SDK
 
 * [ ] Add SDK docs to documentation site
-* [ ] Add SEO Pack extension support
 * [ ] Add Checkout API support
 
 ## Features

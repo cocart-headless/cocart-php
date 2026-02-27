@@ -301,6 +301,77 @@ $response = $client->products()->reviews();
 $response = $client->products()->productReviews(123);
 ```
 
+## SEO Data
+
+> Requires the [CoCart SEO Pack](https://cocartapi.com) plugin.
+
+Get SEO metadata, Open Graph, Twitter cards, and Schema.org structured data for products.
+
+### By Product ID
+
+```php
+$response = $client->products()->seo(123);
+
+// SEO provider (yoast, rankmath, aioseo, etc.)
+$provider = $response->get('provider');
+
+// Meta tags
+$title = $response->get('meta_data.meta_title');
+$description = $response->get('meta_data.meta_description');
+$canonical = $response->get('meta_data.canonical_url');
+
+// Open Graph
+$ogTitle = $response->get('meta_data.opengraph.title');
+$ogImage = $response->get('meta_data.opengraph.image');
+
+// Twitter Card
+$twitterCard = $response->get('meta_data.twitter.card');
+$twitterImage = $response->get('meta_data.twitter.image');
+
+// Robots
+$index = $response->get('meta_data.robots.index');   // true/false
+$follow = $response->get('meta_data.robots.follow');  // true/false
+
+// Schema.org structured data (ready to embed as JSON-LD)
+$schema = $response->get('schema');
+```
+
+### By Product Slug
+
+```php
+$response = $client->products()->seoBySlug('premium-t-shirt');
+
+$title = $response->get('meta_data.meta_title');
+$schema = $response->get('schema');
+```
+
+### Rendering in HTML
+
+```php
+$response = $client->products()->seo(123);
+$meta = $response->get('meta_data');
+$schema = $response->get('schema');
+?>
+
+<title><?= htmlspecialchars($meta['meta_title']) ?></title>
+<meta name="description" content="<?= htmlspecialchars($meta['meta_description']) ?>">
+<link rel="canonical" href="<?= htmlspecialchars($meta['canonical_url']) ?>">
+
+<!-- Open Graph -->
+<meta property="og:title" content="<?= htmlspecialchars($meta['opengraph']['title']) ?>">
+<meta property="og:description" content="<?= htmlspecialchars($meta['opengraph']['description']) ?>">
+<meta property="og:image" content="<?= htmlspecialchars($meta['opengraph']['image']) ?>">
+<meta property="og:type" content="<?= htmlspecialchars($meta['opengraph']['type']) ?>">
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="<?= htmlspecialchars($meta['twitter']['card']) ?>">
+<meta name="twitter:title" content="<?= htmlspecialchars($meta['twitter']['title']) ?>">
+<meta name="twitter:image" content="<?= htmlspecialchars($meta['twitter']['image']) ?>">
+
+<!-- Schema.org JSON-LD -->
+<script type="application/ld+json"><?= json_encode($schema) ?></script>
+```
+
 ## Working with Responses
 
 All methods return a `Response` object:

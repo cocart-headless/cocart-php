@@ -327,6 +327,34 @@ class Products extends Endpoint
     }
 
     /**
+     * Get SEO data for a product by ID
+     *
+     * Returns SEO metadata, Open Graph, Twitter cards, and Schema.org
+     * structured data. Requires the CoCart SEO Pack plugin.
+     *
+     * @param int $productId Product ID
+     * @return Response
+     */
+    public function seo(int $productId): Response
+    {
+        return $this->get("{$productId}/seo");
+    }
+
+    /**
+     * Get SEO data for a product by slug
+     *
+     * Returns SEO metadata, Open Graph, Twitter cards, and Schema.org
+     * structured data. Requires the CoCart SEO Pack plugin.
+     *
+     * @param string $slug Product slug
+     * @return Response
+     */
+    public function seoBySlug(string $slug): Response
+    {
+        return $this->get("{$slug}/seo");
+    }
+
+    /**
      * Get product reviews
      *
      * @param array $params Query parameters
