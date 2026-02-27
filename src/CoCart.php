@@ -1134,8 +1134,8 @@ class CoCart implements CoCartInterface
         $message = $data['message'] ?? 'An unknown error occurred';
         $httpCode = $response->getStatusCode();
 
-        // Authentication errors
-        if ($httpCode === 401 || str_contains($code, 'authenticate')) {
+        // Authentication errors (401, 403 with auth codes)
+        if ($httpCode === 401 || $httpCode === 403 || str_contains($code, 'authenticat')) {
             throw new AuthenticationException($message, $httpCode, $code, $data);
         }
 

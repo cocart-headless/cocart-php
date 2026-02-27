@@ -7,8 +7,6 @@ use CoCart;
 use CoCart\Exceptions\AuthenticationException;
 use CoCart\Exceptions\CoCartException;
 use CoCart\Exceptions\ValidationException;
-use PHPUnit\Framework\Attributes\PreserveGlobalState;
-use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use PHPUnit\Framework\TestCase;
 
 class CoCartTest extends TestCase
@@ -18,6 +16,18 @@ class CoCartTest extends TestCase
     protected function setUp(): void
     {
         $this->mockAdapter = new MockHttpAdapter();
+
+        // Ensure session is available for session tests
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        // Clean session state before each test
+        $_SESSION = [];
+    }
+
+    protected function tearDown(): void
+    {
+        $_SESSION = [];
     }
 
     private function createClient(array $options = []): CoCart
@@ -507,11 +517,8 @@ class CoCartTest extends TestCase
 
     // --- Auto-storage (cart key persistence via $_SESSION) ---
 
-    #[RunInSeparateProcess]
-    #[PreserveGlobalState(false)]
     public function testCartKeyRestoredFromSession(): void
     {
-        session_start();
         $_SESSION['cocart_cart_key'] = 'restored_key';
 
         $client = new CoCart('https://store.example.com', [
@@ -522,8 +529,6 @@ class CoCartTest extends TestCase
         $this->assertSame('restored_key', $client->getCartKey());
     }
 
-    #[RunInSeparateProcess]
-    #[PreserveGlobalState(false)]
     public function testCartKeyPersistedToSessionOnExtraction(): void
     {
         $this->mockAdapter->queueResponse(200, ['Cart-Key' => 'new_guest_key'], '{}');
@@ -537,11 +542,8 @@ class CoCartTest extends TestCase
         $this->assertSame('new_guest_key', $_SESSION['cocart_cart_key']);
     }
 
-    #[RunInSeparateProcess]
-    #[PreserveGlobalState(false)]
     public function testExplicitCartKeyTakesPriorityOverSession(): void
     {
-        session_start();
         $_SESSION['cocart_cart_key'] = 'session_key';
 
         $client = new CoCart('https://store.example.com', [
@@ -553,8 +555,6 @@ class CoCartTest extends TestCase
         $this->assertSame('explicit_key', $client->getCartKey());
     }
 
-    #[RunInSeparateProcess]
-    #[PreserveGlobalState(false)]
     public function testClearSessionRemovesFromSession(): void
     {
         $this->mockAdapter->queueResponse(200, ['Cart-Key' => 'temp_key'], '{}');
@@ -573,8 +573,6 @@ class CoCartTest extends TestCase
         $this->assertNull($client->getCartKey());
     }
 
-    #[RunInSeparateProcess]
-    #[PreserveGlobalState(false)]
     public function testAutoStorageDisabledDoesNotTouchSession(): void
     {
         $this->mockAdapter->queueResponse(200, ['Cart-Key' => 'ignored_key'], '{}');
@@ -590,11 +588,8 @@ class CoCartTest extends TestCase
         $this->assertArrayNotHasKey('cocart_cart_key', $_SESSION ?? []);
     }
 
-    #[RunInSeparateProcess]
-    #[PreserveGlobalState(false)]
     public function testCustomSessionKey(): void
     {
-        session_start();
         $_SESSION['my_store_cart'] = 'custom_key';
 
         $client = new CoCart('https://store.example.com', [

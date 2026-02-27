@@ -98,8 +98,8 @@ class JwtManager
      * Calls POST {namespace}/v2/login and extracts jwt_token and
      * jwt_refresh from the extras field in the response.
      *
-     * If the CoCart JWT Authentication plugin is not installed, the SDK
-     * falls back to Basic Auth automatically so login() always works.
+     * Throws AuthenticationException if the JWT token is not present
+     * in the response (e.g. JWT Authentication plugin not installed).
      *
      * @param string $username Username, email, or phone
      * @param string $password Password
@@ -118,18 +118,21 @@ class JwtManager
         $jwtToken = $data['extras']['jwt_token'] ?? null;
         $refreshToken = $data['extras']['jwt_refresh'] ?? null;
 
-        if ($jwtToken !== null) {
-            $this->client->setJwtToken($jwtToken);
-
-            if ($refreshToken !== null) {
-                $this->client->setRefreshToken($refreshToken);
-            }
-
-            $this->persistTokens();
-        } else {
-            // JWT plugin not installed — fall back to Basic Auth
-            $this->client->setAuth($username, $password);
+        if ($jwtToken === null) {
+            throw new AuthenticationException(
+                'JWT token not found in login response. Is the CoCart JWT Authentication plugin installed?',
+                0,
+                'cocart_jwt_missing'
+            );
         }
+
+        $this->client->setJwtToken($jwtToken);
+
+        if ($refreshToken !== null) {
+            $this->client->setRefreshToken($refreshToken);
+        }
+
+        $this->persistTokens();
 
         return $response;
     }

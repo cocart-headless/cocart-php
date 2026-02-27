@@ -15,6 +15,16 @@ class JwtManagerTest extends TestCase
     protected function setUp(): void
     {
         $this->mockAdapter = new MockHttpAdapter();
+
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        $_SESSION = [];
+    }
+
+    protected function tearDown(): void
+    {
+        $_SESSION = [];
     }
 
     private function createClient(array $options = []): CoCart
