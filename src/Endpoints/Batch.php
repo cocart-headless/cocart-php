@@ -99,6 +99,8 @@ class Batch extends Endpoint
             throw new ValidationException('No requests queued for batch execution.', 400, 'cocart_batch_empty');
         }
 
+        $this->client->requiresBasic('batch()->execute');
+
         $data = [
             'validation' => $this->validation,
             'requests' => $this->requests,
