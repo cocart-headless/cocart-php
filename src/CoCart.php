@@ -22,6 +22,7 @@ declare(strict_types=1);
 use CoCart\Exceptions\CoCartException;
 use CoCart\Exceptions\AuthenticationException;
 use CoCart\Exceptions\ValidationException;
+use CoCart\Exceptions\VersionException;
 use CoCart\Endpoints\Cart;
 use CoCart\Endpoints\Products;
 use CoCart\Endpoints\Store;
@@ -128,6 +129,13 @@ class CoCart implements CoCartInterface
      * @var string|null
      */
     protected ?string $consumerSecret = null;
+
+    /**
+     * CoCart main plugin identifier ('basic' or 'legacy')
+     *
+     * @var string
+     */
+    protected string $mainPlugin = 'basic';
 
     /**
      * Maximum number of retries for transient failures
@@ -328,6 +336,10 @@ class CoCart implements CoCartInterface
 
         if (isset($options['etag'])) {
             $this->etagEnabled = (bool) $options['etag'];
+        }
+
+        if (isset($options['main_plugin'])) {
+            $this->mainPlugin = $options['main_plugin'];
         }
 
         // Set HTTP adapter
@@ -571,6 +583,43 @@ class CoCart implements CoCartInterface
     public function getNamespace(): string
     {
         return $this->namespace;
+    }
+
+    /**
+     * Get the configured CoCart main plugin identifier
+     *
+     * @return string 'basic' or 'legacy'
+     */
+    public function getMainPlugin(): string
+    {
+        return $this->mainPlugin;
+    }
+
+    /**
+     * Set the CoCart main plugin identifier
+     *
+     * @param string $mainPlugin 'basic' or 'legacy'
+     * @return $this
+     */
+    public function setMainPlugin(string $mainPlugin): static
+    {
+        $this->mainPlugin = $mainPlugin;
+        return $this;
+    }
+
+    /**
+     * Guard that throws if a method requires CoCart Basic but the SDK
+     * is configured for the legacy plugin.
+     *
+     * @param string $method The method name for the error message
+     * @return void
+     * @throws VersionException
+     */
+    public function requiresBasic(string $method): void
+    {
+        if ($this->mainPlugin === 'legacy') {
+            throw new VersionException($method);
+        }
     }
 
     /**
@@ -1102,10 +1151,19 @@ class CoCart implements CoCartInterface
             $params['cart_key'] = $this->cartKey;
         }
 
-        // Normalize 'fields' to '_fields' (WordPress REST API standard)
-        if (isset($params['fields']) && !isset($params['_fields'])) {
-            $params['_fields'] = $params['fields'];
-            unset($params['fields']);
+        // Normalize field filtering parameter based on main plugin
+        if ($this->mainPlugin === 'legacy') {
+            // Legacy plugin uses CoCart's custom 'fields' parameter
+            if (isset($params['_fields']) && !isset($params['fields'])) {
+                $params['fields'] = $params['_fields'];
+                unset($params['_fields']);
+            }
+        } else {
+            // CoCart Basic uses WordPress standard '_fields'
+            if (isset($params['fields']) && !isset($params['_fields'])) {
+                $params['_fields'] = $params['fields'];
+                unset($params['fields']);
+            }
         }
 
         $url = sprintf(

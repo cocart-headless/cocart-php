@@ -287,6 +287,30 @@ interface CoCartInterface
     public function getNamespace(): string;
 
     /**
+     * Get the configured CoCart main plugin identifier
+     *
+     * @return string 'basic' or 'legacy'
+     */
+    public function getMainPlugin(): string;
+
+    /**
+     * Set the CoCart main plugin identifier
+     *
+     * @param string $mainPlugin 'basic' or 'legacy'
+     * @return static
+     */
+    public function setMainPlugin(string $mainPlugin): static;
+
+    /**
+     * Guard that throws if a method requires CoCart Basic
+     *
+     * @param string $method The method name for the error message
+     * @return void
+     * @throws \CoCart\Exceptions\VersionException
+     */
+    public function requiresBasic(string $method): void;
+
+    /**
      * Set the authentication header name
      *
      * @param string $header Header name (e.g. 'X-Authorization')

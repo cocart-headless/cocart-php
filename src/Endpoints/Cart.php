@@ -52,6 +52,7 @@ class Cart extends Endpoint
      */
     public function create(): Response
     {
+        $this->client->requiresBasic('cart()->create');
         return $this->post('');
     }
 

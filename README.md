@@ -9,13 +9,29 @@
 
 The Official PHP SDK for the [CoCart REST API](https://docs.cocartapi.com).
 
-> ⚠️ Supports API v2 ONLY! No legacy API supported.
+> Supports API v2 for both **CoCart Basic** and the **legacy CoCart plugin** (`cart-rest-api-for-woocommerce` v4.x).
+
+> [!IMPORTANT]
+> This SDK is still in development and not yet ready for production use. Provide feedback if you experience a bug.
 
 ## TODO to complete the SDK
 
 * [ ] Add SDK docs to documentation site
+* [ ] Add support for Cart API extras
 * [ ] Add Checkout API support
 * [ ] Add Customers Account API support
+
+---
+
+## Requirements
+
+- PHP 8.2 or higher
+- CoCart Basic plugin installed on your WooCommerce store
+- One of: Guzzle (recommended), cURL, or PHP Streams
+
+## Support Policy
+
+See [SUPPORT.md](SUPPORT.md) for our versioning policy, supported PHP versions, and support lifecycle.
 
 ## Features
 
@@ -31,14 +47,9 @@ The Official PHP SDK for the [CoCart REST API](https://docs.cocartapi.com).
 - Multiple HTTP adapters (Guzzle, cURL, WordPress HTTP API, PHP Streams)
 - `CoCartInterface` for easy mocking in tests
 - ETag conditional requests for reduced bandwidth (enabled by default)
+- Legacy CoCart plugin support with version-aware endpoint guards
 - Comprehensive error handling
 - PSR-4 autoloading
-
-## Requirements
-
-- PHP 8.2 or higher
-- CoCart Basic plugin installed on your WooCommerce store
-- One of: Guzzle (recommended), cURL, or PHP Streams
 
 ## Installation
 
@@ -88,18 +99,34 @@ $client = new CoCart('https://your-store.com', [
     'verify_ssl'        => true,
     'rest_prefix'       => 'wp-json',                // Custom REST prefix
     'namespace'         => 'cocart',                 // Custom namespace - Only supported if you have the WhiteLabel add-on
+    'main_plugin'       => 'basic',                   // 'basic' (default) or 'legacy' for legacy CoCart plugin
     'etag'              => true,                     // ETag conditional requests (default true)
     'auto_storage'      => true,                     // Auto-persist cart key to $_SESSION
     'session_key'       => 'cocart_cart_key',        // Session key name
 ]);
 ```
 
+## CoCart Channels
+
+We have different channels at your disposal where you can find information about the CoCart project, discuss it and get involved:
+
+[![Twitter: cocartapi](https://img.shields.io/twitter/follow/cocartapi?style=social)](https://twitter.com/cocartapi) [![CoCart GitHub Stars](https://img.shields.io/github/stars/cocart-headless/cocart-js?style=social)](https://github.com/cocart-headless/cocart-js)
+
+<ul>
+  <li>📖 <strong>Documentation</strong>: this is the place to learn how to use CoCart API. <a href="https://cocartapi.com/docs/?utm_medium=gh&utm_source=github&utm_campaign=readme&utm_content=cocart">Get started!</a></li>
+  <li>👪 <strong>Community</strong>: use our Discord chat room to share any doubts, feedback and meet great people. This is your place too to share <a href="https://cocartapi.com/community/?utm_medium=gh&utm_source=github&utm_campaign=readme&utm_content=cocart">how are you planning to use CoCart!</a></li>
+  <li>🐞 <strong>GitHub</strong>: we use GitHub for bugs and pull requests, doubts are solved with the community.</li>
+  <li>🐦 <strong>Social media</strong>: a more informal place to interact with CoCart users, reach out to us on <a href="https://twitter.com/cocartapi">X/Twitter.</a></li>
+</ul>
+
+## Credits
+
+Website [cocartapi.com](https://cocartapi.com/?ref=github) &nbsp;&middot;&nbsp;
+GitHub [@cocart-headless](https://github.com/cocart-headless) &nbsp;&middot;&nbsp;
+X/Twitter [@cocartapi](https://twitter.com/cocartapi) &nbsp;&middot;&nbsp;
+[Facebook](https://www.facebook.com/cocartforwc/) &nbsp;&middot;&nbsp;
+[Instagram](https://www.instagram.com/cocartheadless/)
+
 ## License
 
-MIT License - see [LICENSE](LICENSE) file for details.
-
-## Support
-
-- [CoCart Documentation](https://docs.cocartapi.com)
-- [CoCart Discord Community](https://cocartapi.com/community)
-- [GitHub Issues](https://github.com/cocart-headless/cocart-php/issues)
+MIT

@@ -68,6 +68,7 @@ class Products extends Endpoint
      */
     public function findBySlug(string $slug, array $params = []): Response
     {
+        $this->client->requiresBasic('products()->findBySlug');
         return $this->get($slug, $params);
     }
 
@@ -218,6 +219,7 @@ class Products extends Endpoint
      */
     public function variation(int $productId, int $variationId, array $params = []): Response
     {
+        $this->client->requiresBasic('products()->variation');
         return $this->get("{$productId}/variations/{$variationId}", $params);
     }
 
@@ -241,6 +243,7 @@ class Products extends Endpoint
      */
     public function category(int $categoryId, array $params = []): Response
     {
+        $this->client->requiresBasic('products()->category');
         return $this->get("categories/{$categoryId}", $params);
     }
 
@@ -264,6 +267,7 @@ class Products extends Endpoint
      */
     public function tag(int $tagId, array $params = []): Response
     {
+        $this->client->requiresBasic('products()->tag');
         return $this->get("tags/{$tagId}", $params);
     }
 
@@ -324,6 +328,7 @@ class Products extends Endpoint
      */
     public function attributeBySlug(string $slug, array $params = []): Response
     {
+        $this->client->requiresBasic('products()->attributeBySlug');
         return $this->get("attributes/{$slug}", $params);
     }
 
@@ -336,6 +341,7 @@ class Products extends Endpoint
      */
     public function attributeTermsBySlug(string $slug, array $params = []): Response
     {
+        $this->client->requiresBasic('products()->attributeTermsBySlug');
         return $this->get("attributes/{$slug}/terms", $params);
     }
 
@@ -349,6 +355,7 @@ class Products extends Endpoint
      */
     public function attributeTermBySlug(string $attributeSlug, string $termSlug, array $params = []): Response
     {
+        $this->client->requiresBasic('products()->attributeTermBySlug');
         return $this->get("attributes/{$attributeSlug}/terms/{$termSlug}", $params);
     }
 
@@ -360,6 +367,7 @@ class Products extends Endpoint
      */
     public function brands(array $params = []): Response
     {
+        $this->client->requiresBasic('products()->brands');
         return $this->get('brands', $params);
     }
 
@@ -372,6 +380,7 @@ class Products extends Endpoint
      */
     public function brand(int $brandId, array $params = []): Response
     {
+        $this->client->requiresBasic('products()->brand');
         return $this->get("brands/{$brandId}", $params);
     }
 
@@ -384,6 +393,7 @@ class Products extends Endpoint
      */
     public function byBrand(string $brandSlug, array $params = []): Response
     {
+        $this->client->requiresBasic('products()->byBrand');
         $params['brand'] = $brandSlug;
         return $this->all($params);
     }
@@ -448,6 +458,7 @@ class Products extends Endpoint
      */
     public function myReviews(array $params = []): Response
     {
+        $this->client->requiresBasic('products()->myReviews');
         return $this->get('reviews/mine', $params);
     }
 
