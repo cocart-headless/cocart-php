@@ -29,6 +29,10 @@ The Official PHP SDK for the [CoCart REST API](https://docs.cocartapi.com).
 - CoCart Basic plugin installed on your WooCommerce store
 - One of: Guzzle (recommended), cURL, or PHP Streams
 
+## Support Policy
+
+See [SUPPORT.md](SUPPORT.md) for our versioning policy, supported PHP versions, and support lifecycle.
+
 ## Features
 
 - Full cart management (add, update, remove, clear items)
