@@ -168,7 +168,7 @@ class VersionTest extends TestCase
     public function testBatchExecuteThrowsOnLegacy(): void
     {
         $client = $this->createLegacyClient();
-        $client->batch()->get('/products');
+        $client->batch()->add('/products');
         $this->expectException(VersionException::class);
         $client->batch()->execute();
     }
@@ -254,7 +254,7 @@ class VersionTest extends TestCase
         $this->mockAdapter->queueResponse(200, [], '{"items":[]}');
 
         $client = $this->createLegacyClient();
-        $client->cart()->get(['_fields' => 'items,totals']);
+        $client->cart()->get('', ['_fields' => 'items,totals']);
 
         $request = $this->mockAdapter->getLastRequest();
         $this->assertStringContainsString('fields=', $request['url']);
@@ -266,7 +266,7 @@ class VersionTest extends TestCase
         $this->mockAdapter->queueResponse(200, [], '{"items":[]}');
 
         $client = $this->createClient();
-        $client->cart()->get(['fields' => 'items,totals']);
+        $client->cart()->get('', ['fields' => 'items,totals']);
 
         $request = $this->mockAdapter->getLastRequest();
         $this->assertStringContainsString('_fields=', $request['url']);
