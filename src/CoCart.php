@@ -21,6 +21,7 @@ declare(strict_types=1);
 
 use CoCart\Exceptions\CoCartException;
 use CoCart\Exceptions\AuthenticationException;
+use CoCart\Exceptions\TwoFactorRequiredException;
 use CoCart\Exceptions\ValidationException;
 use CoCart\Exceptions\VersionException;
 use CoCart\Endpoints\Cart;
@@ -771,6 +772,27 @@ class CoCart implements CoCartInterface
     }
 
     /**
+     * Complete login after a 2FA challenge
+     *
+     * Call this after catching TwoFactorRequiredException from login().
+     *
+     * @param string      $username Username, email, or phone
+     * @param string      $password Password
+     * @param string      $code     The 2FA code from the user
+     * @param string|null $provider Provider name (e.g. 'email', 'totp'); omit to use server default
+     * @return Response The login response (contains user profile data)
+     * @throws CoCartException
+     */
+    public function loginWith2fa(
+        string $username,
+        string $password,
+        string $code,
+        ?string $provider = null
+    ): Response {
+        return $this->jwt()->loginWith2fa($username, $password, $code, $provider);
+    }
+
+    /**
      * Logout — clear all JWT tokens
      *
      * @return $this
@@ -946,6 +968,10 @@ class CoCart implements CoCartInterface
         try {
             return $this->executeRequest($method, $endpoint, $params, $data);
         } catch (AuthenticationException $e) {
+            if ($e instanceof TwoFactorRequiredException) {
+                throw $e;
+            }
+
             if ($this->jwtManager !== null
                 && $this->jwtManager->isAutoRefreshEnabled()
                 && $this->refreshToken !== null
@@ -1257,6 +1283,11 @@ class CoCart implements CoCartInterface
         $code = $data['code'] ?? 'unknown_error';
         $message = $data['message'] ?? 'An unknown error occurred';
         $httpCode = $response->getStatusCode();
+
+        // 2FA challenge (must be checked before generic 401 handling)
+        if ($code === 'cocart_2fa_required') {
+            throw new TwoFactorRequiredException($message, $httpCode, $code, $data);
+        }
 
         // Authentication errors (401, 403 with auth codes)
         if ($httpCode === 401 || $httpCode === 403 || str_contains($code, 'authenticat')) {

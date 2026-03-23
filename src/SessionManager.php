@@ -207,6 +207,39 @@ class SessionManager
     }
 
     /**
+     * Complete JWT login after a 2FA challenge, optionally merging guest cart
+     *
+     * Call this after catching TwoFactorRequiredException from loginWithJwt().
+     *
+     * @param string      $username  Username, email, or phone
+     * @param string      $password  Password
+     * @param string      $code      The 2FA code from the user
+     * @param string|null $provider  Provider name (e.g. 'email', 'totp'); omit to use server default
+     * @param bool        $mergeCart Whether to merge the guest cart
+     * @return Response
+     * @throws Exceptions\CoCartException
+     */
+    public function loginWithJwt2fa(
+        string $username,
+        string $password,
+        string $code,
+        ?string $provider = null,
+        bool $mergeCart = true
+    ): Response {
+        $guestCartKey = $this->client->getCartKey();
+
+        $loginResponse = $this->jwt()->loginWith2fa($username, $password, $code, $provider);
+
+        $this->clearStoredCartKey();
+
+        if ($mergeCart && $guestCartKey !== null) {
+            $this->client->cart()->get(['cart_key' => $guestCartKey]);
+        }
+
+        return $loginResponse;
+    }
+
+    /**
      * Logout and start a new guest session
      *
      * @return $this

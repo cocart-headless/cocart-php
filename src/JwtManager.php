@@ -14,6 +14,7 @@ namespace CoCart;
 
 use CoCart\Exceptions\AuthenticationException;
 use CoCart\Exceptions\CoCartException;
+use CoCart\Exceptions\TwoFactorRequiredException;
 
 class JwtManager
 {
@@ -138,6 +139,60 @@ class JwtManager
     }
 
     /**
+     * Complete login after a 2FA challenge
+     *
+     * Call this after catching TwoFactorRequiredException from login().
+     *
+     * @param string      $username Username, email, or phone
+     * @param string      $password Password
+     * @param string      $code     The 2FA code from the user
+     * @param string|null $provider Provider name (e.g. 'email', 'totp'); omit to use server default
+     * @return Response The full login response (contains user profile data)
+     * @throws CoCartException
+     */
+    public function loginWith2fa(
+        string $username,
+        string $password,
+        string $code,
+        ?string $provider = null
+    ): Response {
+        $payload = [
+            'username' => $username,
+            'password' => $password,
+            '2fa_code' => $code,
+        ];
+
+        if ($provider !== null) {
+            $payload['2fa_provider'] = $provider;
+        }
+
+        $response = $this->client->post('login', $payload);
+
+        $data = $response->toArray();
+
+        $jwtToken = $data['extras']['jwt_token'] ?? null;
+        $refreshToken = $data['extras']['jwt_refresh'] ?? null;
+
+        if ($jwtToken === null) {
+            throw new AuthenticationException(
+                'JWT token not found in 2FA login response. Is the CoCart JWT Authentication plugin installed?',
+                0,
+                'cocart_jwt_missing'
+            );
+        }
+
+        $this->client->setJwtToken($jwtToken);
+
+        if ($refreshToken !== null) {
+            $this->client->setRefreshToken($refreshToken);
+        }
+
+        $this->persistTokens();
+
+        return $response;
+    }
+
+    /**
      * Refresh the JWT access token using the refresh token
      *
      * Calls POST {namespace}/jwt/refresh-token.
@@ -221,7 +276,10 @@ class JwtManager
         try {
             return $callback($this->client);
         } catch (AuthenticationException $e) {
-            if ($this->isRefreshing || $this->client->getRefreshToken() === null) {
+            if ($e instanceof TwoFactorRequiredException
+                || $this->isRefreshing
+                || $this->client->getRefreshToken() === null
+            ) {
                 throw $e;
             }
 
