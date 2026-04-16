@@ -1235,6 +1235,7 @@ class CoCart implements CoCartInterface
         // Add cart key header (alternative to query param)
         if ($this->cartKey && !$this->isAuthenticated()) {
             $headers['Cart-Key'] = $this->cartKey;
+            $headers['CoCart-API-Cart-Key'] = $this->cartKey; // Fallback for older plugin versions
         }
 
         // Add custom headers
@@ -1248,8 +1249,8 @@ class CoCart implements CoCartInterface
      */
     protected function extractCartKeyFromHeaders(Response $response): void
     {
-        // Check for Cart-Key header (current API version)
-        $cartKey = $response->getHeader('Cart-Key');
+        // Check for Cart-Key header (current API version), fallback to older header
+        $cartKey = $response->getHeader('Cart-Key') ?? $response->getHeader('CoCart-API-Cart-Key');
 
         if ($cartKey !== null) {
             $this->cartKey = $cartKey;
