@@ -24,6 +24,7 @@ use CoCart\Exceptions\AuthenticationException;
 use CoCart\Exceptions\TwoFactorRequiredException;
 use CoCart\Exceptions\ValidationException;
 use CoCart\Exceptions\VersionException;
+use CoCart\Endpoints\Account;
 use CoCart\Endpoints\Cart;
 use CoCart\Endpoints\Products;
 use CoCart\Endpoints\Store;
@@ -216,6 +217,13 @@ class CoCart implements CoCartInterface
      *
      * @var Cart|null
      */
+    /**
+     * Account endpoint instance
+     *
+     * @var Account|null
+     */
+    protected ?Account $account = null;
+
     protected ?Cart $cart = null;
 
     /**
@@ -828,6 +836,19 @@ class CoCart implements CoCartInterface
     public function isGuest(): bool
     {
         return !$this->isAuthenticated();
+    }
+
+    /**
+     * Get Account endpoint
+     *
+     * @return Account
+     */
+    public function account(): Account
+    {
+        if ($this->account === null) {
+            $this->account = new Account($this);
+        }
+        return $this->account;
     }
 
     /**
