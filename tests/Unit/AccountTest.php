@@ -120,7 +120,7 @@ class AccountTest extends TestCase
 
         $request = $this->mockAdapter->getLastRequest();
         $this->assertStringContainsString('cocart/v2/my-account/orders/7', $request['url']);
-        $this->assertStringContainsString('email=guest%40example.com', urldecode($request['url']));
+        $this->assertStringContainsString('email=guest%40example.com', $request['url']);
     }
 
     // --- getOrderDownloads ---
