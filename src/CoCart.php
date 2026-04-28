@@ -21,8 +21,10 @@ declare(strict_types=1);
 
 use CoCart\Exceptions\CoCartException;
 use CoCart\Exceptions\AuthenticationException;
+use CoCart\Exceptions\TwoFactorRequiredException;
 use CoCart\Exceptions\ValidationException;
 use CoCart\Exceptions\VersionException;
+use CoCart\Endpoints\Account;
 use CoCart\Endpoints\Cart;
 use CoCart\Endpoints\Products;
 use CoCart\Endpoints\Store;
@@ -215,6 +217,13 @@ class CoCart implements CoCartInterface
      *
      * @var Cart|null
      */
+    /**
+     * Account endpoint instance
+     *
+     * @var Account|null
+     */
+    protected ?Account $account = null;
+
     protected ?Cart $cart = null;
 
     /**
@@ -771,6 +780,27 @@ class CoCart implements CoCartInterface
     }
 
     /**
+     * Complete login after a 2FA challenge
+     *
+     * Call this after catching TwoFactorRequiredException from login().
+     *
+     * @param string      $username Username, email, or phone
+     * @param string      $password Password
+     * @param string      $code     The 2FA code from the user
+     * @param string|null $provider Provider name (e.g. 'email', 'totp'); omit to use server default
+     * @return Response The login response (contains user profile data)
+     * @throws CoCartException
+     */
+    public function loginWith2fa(
+        string $username,
+        string $password,
+        string $code,
+        ?string $provider = null
+    ): Response {
+        return $this->jwt()->loginWith2fa($username, $password, $code, $provider);
+    }
+
+    /**
      * Logout — clear all JWT tokens
      *
      * @return $this
@@ -806,6 +836,19 @@ class CoCart implements CoCartInterface
     public function isGuest(): bool
     {
         return !$this->isAuthenticated();
+    }
+
+    /**
+     * Get Account endpoint
+     *
+     * @return Account
+     */
+    public function account(): Account
+    {
+        if ($this->account === null) {
+            $this->account = new Account($this);
+        }
+        return $this->account;
     }
 
     /**
@@ -946,6 +989,10 @@ class CoCart implements CoCartInterface
         try {
             return $this->executeRequest($method, $endpoint, $params, $data);
         } catch (AuthenticationException $e) {
+            if ($e instanceof TwoFactorRequiredException) {
+                throw $e;
+            }
+
             if ($this->jwtManager !== null
                 && $this->jwtManager->isAutoRefreshEnabled()
                 && $this->refreshToken !== null
@@ -1209,6 +1256,7 @@ class CoCart implements CoCartInterface
         // Add cart key header (alternative to query param)
         if ($this->cartKey && !$this->isAuthenticated()) {
             $headers['Cart-Key'] = $this->cartKey;
+            $headers['CoCart-API-Cart-Key'] = $this->cartKey; // Fallback for older plugin versions
         }
 
         // Add custom headers
@@ -1222,8 +1270,8 @@ class CoCart implements CoCartInterface
      */
     protected function extractCartKeyFromHeaders(Response $response): void
     {
-        // Check for Cart-Key header (current API version)
-        $cartKey = $response->getHeader('Cart-Key');
+        // Check for Cart-Key header (current API version), fallback to older header
+        $cartKey = $response->getHeader('Cart-Key') ?? $response->getHeader('CoCart-API-Cart-Key');
 
         if ($cartKey !== null) {
             $this->cartKey = $cartKey;
@@ -1257,6 +1305,11 @@ class CoCart implements CoCartInterface
         $code = $data['code'] ?? 'unknown_error';
         $message = $data['message'] ?? 'An unknown error occurred';
         $httpCode = $response->getStatusCode();
+
+        // 2FA challenge (must be checked before generic 401 handling)
+        if ($code === 'cocart_2fa_required') {
+            throw new TwoFactorRequiredException($message, $httpCode, $code, $data);
+        }
 
         // Authentication errors (401, 403 with auth codes)
         if ($httpCode === 401 || $httpCode === 403 || str_contains($code, 'authenticat')) {

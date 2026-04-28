@@ -151,7 +151,7 @@ class Response implements \ArrayAccess
      */
     public function getCartKey(): ?string
     {
-        return $this->getHeader('Cart-Key');
+        return $this->getHeader('Cart-Key') ?? $this->getHeader('CoCart-API-Cart-Key');
     }
 
     /**

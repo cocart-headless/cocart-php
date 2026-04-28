@@ -6,6 +6,7 @@ namespace CoCart\Tests\Unit;
 use CoCart;
 use CoCart\JwtManager;
 use CoCart\Exceptions\AuthenticationException;
+use CoCart\Exceptions\TwoFactorRequiredException;
 use PHPUnit\Framework\TestCase;
 
 class JwtManagerTest extends TestCase
@@ -426,6 +427,160 @@ class JwtManagerTest extends TestCase
         $request = $this->mockAdapter->getLastRequest();
         $this->assertStringContainsString('/mystore/jwt/validate-token', $request['url']);
         $this->assertStringNotContainsString('/cocart/', $request['url']);
+    }
+
+    // --- 2FA tests ---
+
+    private function twoFactorChallengeBody(
+        array $providers = ['email', 'totp'],
+        string $default = 'totp',
+        bool $emailSent = false
+    ): string {
+        return json_encode([
+            'code'    => 'cocart_2fa_required',
+            'message' => '2FA verification required.',
+            'data'    => [
+                'status'              => 401,
+                '2fa_required'        => true,
+                'available_providers' => $providers,
+                'default_provider'    => $default,
+                'email_sent'          => $emailSent,
+            ],
+        ]);
+    }
+
+    public function testLoginThrowsTwoFactorRequiredExceptionOn2faChallenge(): void
+    {
+        $this->mockAdapter->queueResponse(401, [], $this->twoFactorChallengeBody());
+
+        $client = $this->createClient();
+        $jwt = new JwtManager($client);
+
+        $this->expectException(TwoFactorRequiredException::class);
+        $this->expectExceptionMessage('2FA verification required.');
+
+        $jwt->login('user@example.com', 'password');
+    }
+
+    public function testTwoFactorExceptionExposesProviders(): void
+    {
+        $this->mockAdapter->queueResponse(401, [], $this->twoFactorChallengeBody(['email', 'totp'], 'totp', false));
+
+        $client = $this->createClient();
+        $jwt = new JwtManager($client);
+
+        try {
+            $jwt->login('user@example.com', 'password');
+            $this->fail('Expected TwoFactorRequiredException');
+        } catch (TwoFactorRequiredException $e) {
+            $this->assertSame(['email', 'totp'], $e->getAvailableProviders());
+            $this->assertSame('totp', $e->getDefaultProvider());
+            $this->assertFalse($e->isEmailSent());
+            $this->assertSame('cocart_2fa_required', $e->getErrorCode());
+        }
+    }
+
+    public function testTwoFactorExceptionEmailSentFlag(): void
+    {
+        $this->mockAdapter->queueResponse(401, [], $this->twoFactorChallengeBody(['email'], 'email', true));
+
+        $client = $this->createClient();
+        $jwt = new JwtManager($client);
+
+        try {
+            $jwt->login('user@example.com', 'password');
+            $this->fail('Expected TwoFactorRequiredException');
+        } catch (TwoFactorRequiredException $e) {
+            $this->assertTrue($e->isEmailSent());
+            $this->assertSame('email', $e->getDefaultProvider());
+        }
+    }
+
+    public function testLoginWith2faSendsCorrectPayloadWithoutProvider(): void
+    {
+        $this->mockAdapter->queueResponse(200, [], $this->loginResponseBody());
+
+        $client = $this->createClient();
+        $jwt = new JwtManager($client);
+        $jwt->loginWith2fa('user@example.com', 'password123', '123456');
+
+        $request = $this->mockAdapter->getLastRequest();
+        $this->assertSame('POST', $request['method']);
+        $this->assertStringContainsString('/wp-json/cocart/v2/login', $request['url']);
+
+        $body = json_decode($request['body'], true);
+        $this->assertSame('user@example.com', $body['username']);
+        $this->assertSame('password123', $body['password']);
+        $this->assertSame('123456', $body['2fa_code']);
+        $this->assertArrayNotHasKey('2fa_provider', $body);
+    }
+
+    public function testLoginWith2faSendsCorrectPayloadWithProvider(): void
+    {
+        $this->mockAdapter->queueResponse(200, [], $this->loginResponseBody());
+
+        $client = $this->createClient();
+        $jwt = new JwtManager($client);
+        $jwt->loginWith2fa('user@example.com', 'password123', '123456', 'email');
+
+        $body = json_decode($this->mockAdapter->getLastRequest()['body'], true);
+        $this->assertSame('email', $body['2fa_provider']);
+    }
+
+    public function testLoginWith2faExtractsTokens(): void
+    {
+        $this->mockAdapter->queueResponse(200, [], $this->loginResponseBody());
+
+        $client = $this->createClient();
+        $jwt = new JwtManager($client);
+        $jwt->loginWith2fa('user@example.com', 'password123', '654321');
+
+        $this->assertSame('eyJ.test.token', $client->getJwtToken());
+        $this->assertSame('refresh_token_hash_abc123', $client->getRefreshToken());
+    }
+
+    public function testLoginWith2faThrowsWhenNoJwtInResponse(): void
+    {
+        $body = json_encode(['user_id' => '123', 'extras' => []]);
+        $this->mockAdapter->queueResponse(200, [], $body);
+
+        $client = $this->createClient();
+        $jwt = new JwtManager($client);
+
+        $this->expectException(AuthenticationException::class);
+        $this->expectExceptionMessage('JWT token');
+
+        $jwt->loginWith2fa('user', 'pass', '000000');
+    }
+
+    public function testLoginWith2faPersistsTokensToStorage(): void
+    {
+        $this->mockAdapter->queueResponse(200, [], $this->loginResponseBody());
+
+        $storage = new InMemoryStorage();
+        $client = $this->createClient();
+        $jwt = new JwtManager($client, $storage);
+
+        $jwt->loginWith2fa('user', 'pass', '123456');
+
+        $this->assertSame('eyJ.test.token', $storage->get('cocart_jwt_token'));
+        $this->assertSame('refresh_token_hash_abc123', $storage->get('cocart_jwt_refresh_token'));
+    }
+
+    public function testAutoRefreshDoesNotTriggerOn2faChallenge(): void
+    {
+        $this->mockAdapter->queueResponse(401, [], $this->twoFactorChallengeBody());
+
+        $client = $this->createClient(['jwt_refresh_token' => 'valid_refresh']);
+        $jwt = new JwtManager($client, null, ['auto_refresh' => true]);
+        $client->setJwtManager($jwt);
+
+        $this->expectException(TwoFactorRequiredException::class);
+
+        $client->get('cart');
+
+        // Ensure no refresh attempt was made (only 1 request total)
+        $this->assertCount(1, $this->mockAdapter->getRequests());
     }
 }
 

@@ -201,6 +201,25 @@ interface CoCartInterface
     public function login(string $username, string $password): Response;
 
     /**
+     * Complete login after a 2FA challenge
+     *
+     * Call this after catching TwoFactorRequiredException from login().
+     *
+     * @param string      $username Username, email, or phone
+     * @param string      $password Password
+     * @param string      $code     The 2FA code from the user
+     * @param string|null $provider Provider name (e.g. 'email', 'totp'); omit to use server default
+     * @return Response
+     * @throws CoCartException
+     */
+    public function loginWith2fa(
+        string $username,
+        string $password,
+        string $code,
+        ?string $provider = null
+    ): Response;
+
+    /**
      * Logout — clear all JWT tokens
      *
      * @return static
