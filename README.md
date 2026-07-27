@@ -19,7 +19,7 @@ The Official PHP SDK for the [CoCart REST API](https://docs.cocartapi.com).
 * [ ] Add SDK docs to documentation site
 * [ ] Add support for Cart API extras
 * [ ] Add Checkout API support
-* [ ] Add Customers Account API support
+* [x] Add Customers Account API support — implemented in the SDK ([`$client->account()`](docs/account.md)), but the Account API itself is not yet available in a released version of the CoCart plugin. This SDK support is ready for when it ships.
 
 ---
 
@@ -80,6 +80,7 @@ $cart = $client->cart()->get();
 | [Cart](docs/cart.md) | Add/update/remove items, coupons, customer details, shipping, payment, fees, totals |
 | [Products](docs/products.md) | List/search/filter products, pagination, variations, categories, tags, attributes, reviews |
 | [Sessions](docs/sessions.md) | Admin sessions API, SessionManager, storage adapters, cart transfer on login |
+| [Account](docs/account.md) | Customer profile, password, order history, downloads, and reviews (supported by the SDK, not yet released in the CoCart plugin) |
 | [Error Handling](docs/error-handling.md) | Exception hierarchy, catching errors, HTTP status mapping, response error helpers |
 | [Utilities](docs/utilities.md) | Currency and timezone utilities helpers that operate on data already returned by the API. |
 

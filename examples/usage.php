@@ -178,13 +178,10 @@ $client->cart()->updateCustomer(
 );
 echo "Customer details updated!\n";
 
-// Calculate shipping
-$client->cart()->calculateShipping([
-    'country' => 'US',
-    'state' => 'NY',
-    'postcode' => '10001',
-    'city' => 'New York'
-]);
+// Shipping is calculated as a side effect of updateCustomer() setting the
+// destination address above; calculateShipping() is deprecated and just
+// delegates to calculate() now. Call calculate() directly instead.
+$client->cart()->calculate();
 
 // Get shipping methods
 $methods = $client->cart()->getShippingMethods();
@@ -434,33 +431,22 @@ $response = $client->cart()->addItem(123, 1, [
 echo "Items with custom data added!\n\n";
 
 // =============================================================================
-// EXAMPLE 13: Batch Adding Items
+// EXAMPLE 13: Adding Children of a Grouped Product at Once
 // =============================================================================
 
-echo "=== Batch Adding Items ===\n\n";
+echo "=== Adding Children of a Grouped Product at Once ===\n\n";
 
 $client = new CoCart($storeUrl);
 
-$response = $client->cart()->addItems([
-    [
-        'id' => '123',
-        'quantity' => '2'
-    ],
-    [
-        'id' => '456',
-        'quantity' => '1',
-        'variation' => [
-            'attribute_pa_color' => 'red',
-            'attribute_pa_size' => 'medium'
-        ]
-    ],
-    [
-        'id' => '789',
-        'quantity' => '3',
-        'item_data' => [
-            'custom_option' => 'value'
-        ]
-    ]
+// addItems() is specifically for adding multiple children of one WooCommerce
+// Grouped Product in a single request — not a generic "add several unrelated
+// products" call. For adding unrelated products in one round trip, use
+// $client->batch() instead (requires CoCart Plus — see docs/cart.md).
+
+// Grouped product 100 has children 123 and 456
+$response = $client->cart()->addItems(100, [
+    '123' => 2,
+    '456' => 1,
 ]);
 
 echo "Added " . $response->getItemCount() . " items in single request!\n\n";
@@ -513,13 +499,9 @@ $client->cart()->updateCustomer(
 );
 echo "Step 3: Customer details updated\n";
 
-// Step 4: Calculate shipping
-$client->cart()->calculateShipping([
-    'country' => 'US',
-    'state' => 'NY',
-    'postcode' => '10001',
-    'city' => 'New York'
-]);
+// Step 4: Shipping is calculated as a side effect of updateCustomer() above
+// (setting the destination address); just recalculate totals directly.
+$client->cart()->calculate();
 echo "Step 4: Shipping calculated\n";
 
 // Step 5: Get shipping methods and select one

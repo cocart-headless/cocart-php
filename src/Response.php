@@ -340,6 +340,55 @@ class Response implements \ArrayAccess
         return $this->get('cross_sells', []);
     }
 
+    /**
+     * Get cart tax lines from response data, normalized to a flat array of
+     * `['key' => ..., 'name' => ..., 'price' => ...]` entries.
+     *
+     * CoCart Starter 5.0+ already returns `taxes` as an array in this shape.
+     * The community CoCart plugin (and older Starter versions) instead
+     * return an object keyed by the tax rate code, e.g.
+     * `{ "US-US-1": { "name": ..., "price": ... } }` — that legacy shape is
+     * detected and converted here so callers never need to branch on which
+     * plugin/version they're talking to.
+     *
+     * @return array
+     */
+    public function getTaxes(): array
+    {
+        $raw = $this->get('taxes', []);
+
+        if (empty($raw)) {
+            return [];
+        }
+
+        // Already a flat, list-style array — return as-is.
+        if (array_is_list($raw)) {
+            return $raw;
+        }
+
+        // Legacy object keyed by tax rate code — normalize to a flat array.
+        $taxes = [];
+        foreach ($raw as $key => $tax) {
+            $taxes[] = [
+                'key' => $key,
+                'name' => is_array($tax) ? ($tax['name'] ?? null) : null,
+                'price' => is_array($tax) ? ($tax['price'] ?? null) : null,
+            ];
+        }
+
+        return $taxes;
+    }
+
+    /**
+     * Check if the cart has any tax lines
+     *
+     * @return bool
+     */
+    public function hasTaxes(): bool
+    {
+        return !empty($this->getTaxes());
+    }
+
     // --- ETag / Cache helpers ---
 
     /**

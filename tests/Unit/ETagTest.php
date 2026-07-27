@@ -254,6 +254,38 @@ class ETagTest extends TestCase
         $this->assertSame('W/"products_hash"', $fourthRequest['headers']['If-None-Match']);
     }
 
+    public function test304ReturnsCachedBodyInsteadOfEmptyBody(): void
+    {
+        // First request: server returns ETag + real body
+        $this->mockAdapter->queueResponse(200, ['ETag' => 'W/"hash1"'], '{"items":[{"id":"123"}],"item_count":1}');
+        // Second request: server returns 304 with an empty body
+        $this->mockAdapter->queueResponse(304, ['ETag' => 'W/"hash1"'], '');
+
+        $client = $this->createClient();
+
+        $first = $client->get('cart');
+        $this->assertSame(1, $first->get('item_count'));
+
+        $second = $client->get('cart');
+        $this->assertTrue($second->isNotModified());
+        // The 304 body is empty on the wire, but the SDK should surface the
+        // cached data from the last fresh response instead of an empty body.
+        $this->assertSame(1, $second->get('item_count'));
+        $this->assertSame([['id' => '123']], $second->get('items'));
+    }
+
+    public function test304WithoutPriorCacheEntryFallsBackToEmptyBody(): void
+    {
+        // No prior GET — nothing in the ETag cache for this URL.
+        $this->mockAdapter->queueResponse(304, ['ETag' => 'W/"hash1"'], '');
+
+        $client = $this->createClient();
+        $response = $client->get('cart');
+
+        $this->assertTrue($response->isNotModified());
+        $this->assertSame([], $response->toArray());
+    }
+
     public function testSetETagDisablesAfterCreation(): void
     {
         $this->mockAdapter->queueResponse(200, ['ETag' => 'W/"hash1"'], '{}');

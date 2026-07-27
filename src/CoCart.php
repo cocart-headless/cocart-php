@@ -178,9 +178,13 @@ class CoCart implements CoCartInterface
     protected bool $etagEnabled = true;
 
     /**
-     * In-memory ETag cache (URL → ETag value)
+     * In-memory ETag cache (URL → {etag, body, headers})
      *
-     * @var array<string, string>
+     * Caches the body/headers alongside the ETag so a subsequent 304 Not
+     * Modified response (which has no body) can be resolved back to the
+     * last known good data instead of returning an empty response.
+     *
+     * @var array<string, array{etag: string, body: string, headers: array}>
      */
     protected array $etagCache = [];
 
@@ -1067,6 +1071,20 @@ class CoCart implements CoCartInterface
      * @param array|null $data     Request body data
      * @return Response
      * @throws CoCartException
+     *
+     * Note on in-flight GET de-duplication: the TypeScript SDK coalesces
+     * concurrent identical GET requests into one shared in-flight promise,
+     * since a single Node/browser process can have multiple callers awaiting
+     * requests to the same URL at the same time. A typical PHP request
+     * lifecycle is synchronous and single-threaded per web request — this
+     * method call blocks until the HTTP response returns, so there is never
+     * more than one "concurrent" caller within a single PHP process to
+     * de-duplicate against. Sharing results across separate PHP processes/
+     * requests would require an out-of-process cache (e.g. APCu, Redis)
+     * layered on top of the ETag cache, which is a different feature (shared
+     * caching) rather than a straightforward port of the JS pattern. Skipped
+     * for this reason; the ETag cache (see above) already avoids re-fetching
+     * unchanged data across requests.
      */
     protected function executeRequest(string $method, string $endpoint, array $params = [], ?array $data = null): Response
     {
@@ -1081,7 +1099,7 @@ class CoCart implements CoCartInterface
         // Add If-None-Match header for GET requests when ETag is cached
         $skipCache = isset($params['_skip_cache']) && $params['_skip_cache'];
         if ($this->etagEnabled && $method === 'GET' && !$skipCache && isset($this->etagCache[$url])) {
-            $headers['If-None-Match'] = $this->etagCache[$url];
+            $headers['If-None-Match'] = $this->etagCache[$url]['etag'];
         }
 
         $attempt = 0;
@@ -1105,20 +1123,31 @@ class CoCart implements CoCartInterface
                 throw $e;
             }
 
+            // A 304 has no body — reuse the body/headers cached alongside the
+            // ETag that produced the match, so callers still get the actual
+            // data instead of an empty response. Falls back to the live
+            // (empty) response if we somehow have no cache entry for this URL.
+            $isNotModified = $method === 'GET' && $this->etagEnabled && $httpResponse->statusCode === 304;
+            $cachedEntry = $isNotModified ? ($this->etagCache[$url] ?? null) : null;
+
             $this->lastResponse = new Response(
                 $httpResponse->statusCode,
-                $httpResponse->headers,
-                $httpResponse->body
+                $cachedEntry !== null ? $cachedEntry['headers'] : $httpResponse->headers,
+                $cachedEntry !== null ? $cachedEntry['body'] : $httpResponse->body
             );
 
             // Extract cart key from response headers for guest sessions
             $this->extractCartKeyFromHeaders($this->lastResponse);
 
-            // Store ETag from response for future conditional requests
-            if ($this->etagEnabled && $method === 'GET') {
+            // Store ETag + body from a fresh (non-304) response for future conditional requests
+            if ($this->etagEnabled && $method === 'GET' && !$isNotModified) {
                 $etag = $this->lastResponse->getETag();
                 if ($etag !== null) {
-                    $this->etagCache[$url] = $etag;
+                    $this->etagCache[$url] = [
+                        'etag' => $etag,
+                        'body' => $httpResponse->body,
+                        'headers' => $httpResponse->headers,
+                    ];
                 }
             }
 
@@ -1180,8 +1209,26 @@ class CoCart implements CoCartInterface
             }
         }
 
+        sleep($this->getRetryDelaySeconds($attempt));
+    }
+
+    /**
+     * Compute the exponential backoff delay (in seconds) for a retry attempt
+     *
+     * Applies ±20% jitter to the base delay so many clients retrying at once
+     * don't re-collide on the same schedule (avoids synchronized retry storms
+     * against a rate limit).
+     *
+     * @param int $attempt Current attempt number (1-based)
+     * @return int Delay in whole seconds (minimum 1)
+     */
+    protected function getRetryDelaySeconds(int $attempt): int
+    {
         // Exponential backoff: 1s, 2s, 4s, ...
-        sleep(min((int) pow(2, $attempt - 1), 30));
+        $base = min((int) pow(2, $attempt - 1), 30);
+        $jitter = 0.8 + (mt_rand() / mt_getrandmax()) * 0.4;
+
+        return max(1, (int) round($base * $jitter));
     }
 
     /**
@@ -1254,9 +1301,17 @@ class CoCart implements CoCartInterface
         }
 
         // Add cart key header (alternative to query param)
+        //
+        // Only the header name the configured plugin actually allowlists via
+        // CORS should be sent — browsers require a preflight to explicitly
+        // allow a custom header before the real request is sent, and each
+        // plugin's CORS setup only allowlists its own header name (CoCart
+        // Basic/Starter allows 'Cart-Key', the legacy/community plugin allows
+        // 'CoCart-API-Cart-Key'), never both. Sending both would cause the
+        // preflight to reject the one name that store doesn't recognize.
         if ($this->cartKey && !$this->isAuthenticated()) {
-            $headers['Cart-Key'] = $this->cartKey;
-            $headers['CoCart-API-Cart-Key'] = $this->cartKey; // Fallback for older plugin versions
+            $cartKeyHeader = $this->mainPlugin === 'legacy' ? 'CoCart-API-Cart-Key' : 'Cart-Key';
+            $headers[$cartKeyHeader] = $this->cartKey;
         }
 
         // Add custom headers

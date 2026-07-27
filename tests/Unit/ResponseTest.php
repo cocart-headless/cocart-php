@@ -147,6 +147,63 @@ class ResponseTest extends TestCase
         $this->assertSame(3, $response->getItemCount());
     }
 
+    // --- getTaxes() / hasTaxes() ---
+
+    public function testGetTaxesReturnsArrayAsIs(): void
+    {
+        $taxes = [
+            ['key' => 'US-US-1', 'name' => 'State Tax', 'price' => '5.00'],
+        ];
+        $response = new Response(200, [], json_encode(['taxes' => $taxes]));
+
+        $this->assertSame($taxes, $response->getTaxes());
+    }
+
+    public function testGetTaxesNormalizesLegacyObjectShape(): void
+    {
+        $body = json_encode([
+            'taxes' => [
+                'US-US-1' => ['name' => 'State Tax', 'price' => '5.00'],
+                'US-US-2' => ['name' => 'City Tax', 'price' => '1.50'],
+            ],
+        ]);
+        $response = new Response(200, [], $body);
+
+        $taxes = $response->getTaxes();
+
+        $this->assertCount(2, $taxes);
+        $this->assertSame(['key' => 'US-US-1', 'name' => 'State Tax', 'price' => '5.00'], $taxes[0]);
+        $this->assertSame(['key' => 'US-US-2', 'name' => 'City Tax', 'price' => '1.50'], $taxes[1]);
+    }
+
+    public function testGetTaxesReturnsEmptyArrayWhenMissing(): void
+    {
+        $response = new Response(200, [], '{}');
+
+        $this->assertSame([], $response->getTaxes());
+    }
+
+    public function testHasTaxesTrueWhenTaxesPresent(): void
+    {
+        $response = new Response(200, [], json_encode(['taxes' => [['key' => 'a', 'name' => 'Tax', 'price' => '1.00']]]));
+
+        $this->assertTrue($response->hasTaxes());
+    }
+
+    public function testHasTaxesFalseWhenEmpty(): void
+    {
+        $response = new Response(200, [], '{}');
+
+        $this->assertFalse($response->hasTaxes());
+    }
+
+    public function testHasTaxesFalseWhenLegacyObjectEmpty(): void
+    {
+        $response = new Response(200, [], json_encode(['taxes' => new \stdClass()]));
+
+        $this->assertFalse($response->hasTaxes());
+    }
+
     public function testGetErrorCodeAndMessage(): void
     {
         $body = json_encode(['code' => 'not_found', 'message' => 'Item not found']);

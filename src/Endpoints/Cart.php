@@ -12,6 +12,7 @@ declare(strict_types=1);
 
 namespace CoCart\Endpoints;
 
+use CoCart\Exceptions\ValidationException;
 use CoCart\Response;
 
 class Cart extends Endpoint
@@ -106,28 +107,58 @@ class Cart extends Endpoint
     }
 
     /**
-     * Add multiple items to the cart in a single request
+     * Add multiple children of a WooCommerce Grouped Product to the cart in
+     * a single request, via the dedicated `add-items` endpoint.
      *
-     * @param array $items Array of items, each with:
-     *                     - id: string (product/variation ID)
-     *                     - quantity: string
-     *                     - variation: array (optional)
-     *                     - item_data: array (optional)
+     * This is NOT a generic "add several unrelated products" call — the
+     * server requires a single grouped product ID plus a map of that
+     * group's child product IDs to quantities. For adding unrelated
+     * products in one request, use `$client->batch()` instead.
+     *
+     * @param int|string $groupedProductId The parent grouped product's ID
+     * @param array      $items            Map of childId => quantity (shorthand),
+     *                                      or an array of ['id' => ..., 'quantity' => ...] entries
      * @return Response
+     * @throws ValidationException If no items are given
      */
-    public function addItems(array $items): Response
+    public function addItems(int|string $groupedProductId, array $items): Response
     {
-        // Ensure quantity is a string as required by the API
-        foreach ($items as &$item) {
-            if (isset($item['quantity'])) {
-                $item['quantity'] = (string) $item['quantity'];
-            }
-            if (isset($item['id'])) {
-                $item['id'] = (string) $item['id'];
-            }
+        $entries = $this->normalizeAddItemsEntries($items);
+
+        if (empty($entries)) {
+            throw new ValidationException('addItems() requires at least one item.', 400, 'cocart_batch_empty');
         }
 
-        return $this->post('add-items', ['items' => $items]);
+        $quantity = [];
+        foreach ($entries as $childId => $qty) {
+            $quantity[(string) $childId] = (string) $qty;
+        }
+
+        return $this->post('add-items', [
+            'id' => (string) $groupedProductId,
+            'quantity' => $quantity,
+        ]);
+    }
+
+    /**
+     * Normalize the addItems() items argument into a childId => quantity map
+     *
+     * @param array $items Map of childId => quantity, or array of ['id' => ..., 'quantity' => ...]
+     * @return array<string, int|string>
+     */
+    private function normalizeAddItemsEntries(array $items): array
+    {
+        if (array_is_list($items)) {
+            $entries = [];
+            foreach ($items as $item) {
+                if (is_array($item) && isset($item['id'])) {
+                    $entries[(string) $item['id']] = $item['quantity'] ?? 1;
+                }
+            }
+            return $entries;
+        }
+
+        return $items;
     }
 
     /**
@@ -148,31 +179,87 @@ class Cart extends Endpoint
     }
 
     /**
-     * Update multiple items in a single request
+     * Update multiple items' quantities, one request per item, sequentially
+     *
+     * There is no real bulk endpoint for this, so each item is sent as its
+     * own `updateItem()` request, one after another, and the response from
+     * the last update (reflecting the fully-updated cart) is returned. For a
+     * true single round trip, see `batchUpdateItems()`.
      *
      * @param array $items Associative array of item_key => quantity, or
      *                     array of ['item_key' => string, 'quantity' => int, ...options]
      * @return Response
+     * @throws ValidationException If no items are given
      */
     public function updateItems(array $items): Response
     {
-        $formatted = [];
+        $entries = $this->normalizeItemEntries($items);
 
-        foreach ($items as $key => $value) {
-            if (is_array($value)) {
-                // Full format: ['item_key' => '...', 'quantity' => 2, ...]
-                $value['quantity'] = (string) ($value['quantity'] ?? 1);
-                $formatted[] = $value;
-            } else {
-                // Shorthand: item_key => quantity
-                $formatted[] = [
-                    'item_key' => $key,
-                    'quantity' => (string) $value,
-                ];
+        if (empty($entries)) {
+            throw new ValidationException('updateItems() requires at least one item.', 400, 'cocart_batch_empty');
+        }
+
+        $response = null;
+        foreach ($entries as $itemKey => $quantity) {
+            $response = $this->updateItem((string) $itemKey, (int) $quantity);
+        }
+
+        return $response;
+    }
+
+    /**
+     * Update multiple items' quantities in a single request via the batch
+     * endpoint (requires CoCart Plus)
+     *
+     * Unlike `updateItems()`, this is a true single round trip instead of
+     * one sequential request per item. Accepts the same shorthand/full
+     * formats as `updateItems()`.
+     *
+     * @param array $items Associative array of item_key => quantity, or
+     *                     array of ['item_key' => string, 'quantity' => int, ...options]
+     * @return Response
+     * @throws ValidationException If no items are given
+     */
+    public function batchUpdateItems(array $items): Response
+    {
+        $entries = $this->normalizeItemEntries($items);
+
+        if (empty($entries)) {
+            throw new ValidationException('batchUpdateItems() requires at least one item.', 400, 'cocart_batch_empty');
+        }
+
+        // Note: uses add() (POST), not update() (PUT) — updateItem() itself
+        // posts to `item/{itemKey}` (see above), so the batched sub-requests
+        // must match that method to hit the same controller.
+        $batch = $this->client->batch();
+        foreach ($entries as $itemKey => $quantity) {
+            $batch->add("cart/item/{$itemKey}", ['quantity' => (string) $quantity]);
+        }
+
+        return $batch->execute();
+    }
+
+    /**
+     * Normalize the shorthand (item_key => quantity) or full array format
+     * into an item_key => quantity map
+     *
+     * @param array $items
+     * @return array<string, int|string>
+     */
+    private function normalizeItemEntries(array $items): array
+    {
+        if (!array_is_list($items)) {
+            return $items;
+        }
+
+        $entries = [];
+        foreach ($items as $item) {
+            if (is_array($item) && isset($item['item_key'])) {
+                $entries[(string) $item['item_key']] = $item['quantity'] ?? 1;
             }
         }
 
-        return $this->post('update', ['items' => $formatted]);
+        return $entries;
     }
 
     /**
@@ -187,23 +274,54 @@ class Cart extends Endpoint
     }
 
     /**
-     * Remove multiple items from the cart
+     * Remove multiple items from the cart, one request per item, sequentially
+     *
+     * There is no real bulk endpoint for this, so each item is sent as its
+     * own `removeItem()` request, one after another, and the response from
+     * the last removal (reflecting the fully-updated cart) is returned. For
+     * a true single round trip, see `batchRemoveItems()`.
      *
      * @param array $itemKeys Array of cart item keys to remove
      * @return Response
+     * @throws ValidationException If no item keys are given
      */
     public function removeItems(array $itemKeys): Response
     {
-        // Set quantity to 0 for each item to remove them
-        $items = [];
-        foreach ($itemKeys as $key) {
-            $items[] = [
-                'item_key' => $key,
-                'quantity' => '0',
-            ];
+        if (empty($itemKeys)) {
+            throw new ValidationException('removeItems() requires at least one item key.', 400, 'cocart_batch_empty');
         }
 
-        return $this->post('update', ['items' => $items]);
+        $response = null;
+        foreach ($itemKeys as $itemKey) {
+            $response = $this->removeItem((string) $itemKey);
+        }
+
+        return $response;
+    }
+
+    /**
+     * Remove multiple items in a single request via the batch endpoint
+     * (requires CoCart Plus)
+     *
+     * Unlike `removeItems()`, this is a true single round trip instead of
+     * one sequential request per item.
+     *
+     * @param array $itemKeys Array of cart item keys to remove
+     * @return Response
+     * @throws ValidationException If no item keys are given
+     */
+    public function batchRemoveItems(array $itemKeys): Response
+    {
+        if (empty($itemKeys)) {
+            throw new ValidationException('batchRemoveItems() requires at least one item key.', 400, 'cocart_batch_empty');
+        }
+
+        $batch = $this->client->batch();
+        foreach ($itemKeys as $itemKey) {
+            $batch->remove("cart/item/{$itemKey}");
+        }
+
+        return $batch->execute();
     }
 
     /**
@@ -304,26 +422,39 @@ class Cart extends Endpoint
     }
 
     /**
-     * Update customer details
+     * Update customer billing (and optionally shipping) address on the cart
      *
-     * @param array $billing  Billing address fields
-     * @param array $shipping Shipping address fields
+     * Posts to the `update-customer` callback on `POST /cart/update` —
+     * billing fields are sent unprefixed (`first_name`, `address_1`, ...)
+     * and shipping fields are sent `s_`-prefixed (`s_first_name`,
+     * `s_address_1`, ...), which the server requires for any address field
+     * the destination country marks required, independent of whether
+     * `ship_to_different_address` is set. If `$shipping` is omitted/empty,
+     * billing is mirrored into the `s_` fields so that check passes and the
+     * shipping address matches billing, the same as leaving "ship to a
+     * different address" unchecked at a normal WooCommerce checkout.
+     *
+     * @param array $billing  Billing address fields (unprefixed, e.g. first_name, address_1, city, postcode, country, email, phone)
+     * @param array $shipping Shipping address fields, if different from billing. Omit/empty to mirror billing.
      * @return Response
      */
     public function updateCustomer(array $billing = [], array $shipping = []): Response
     {
-        $data = [];
+        $hasDistinctShipping = !empty($shipping);
+        $shipTo = $hasDistinctShipping ? $shipping : $billing;
 
-        if (!empty($billing)) {
-            foreach ($billing as $key => $value) {
-                $data["billing_{$key}"] = $value;
-            }
+        $data = ['namespace' => 'update-customer'];
+
+        foreach ($billing as $key => $value) {
+            $data[$key] = $value;
         }
 
-        if (!empty($shipping)) {
-            foreach ($shipping as $key => $value) {
-                $data["shipping_{$key}"] = $value;
-            }
+        foreach ($shipTo as $key => $value) {
+            $data["s_{$key}"] = $value;
+        }
+
+        if ($hasDistinctShipping) {
+            $data['ship_to_different_address'] = true;
         }
 
         return $this->post('update', $data);
@@ -350,25 +481,43 @@ class Cart extends Endpoint
     }
 
     /**
-     * Set shipping method for the cart
+     * Select a shipping rate for a package (requires CoCart Plus)
      *
-     * @param string $methodKey Shipping method key (e.g., 'flat_rate:1')
+     * Posts `rate_id` (and optional `package_id`) to `set-shipping-method`.
+     * Omit `$packageId` to apply the rate to every package.
+     *
+     * @param string      $rateId    The chosen rate's key, e.g. 'flat_rate:2' (see a shipping package's 'rates' map)
+     * @param string|null $packageId Restrict the selection to one package. Omit to apply to all packages.
      * @return Response
      */
-    public function setShippingMethod(string $methodKey): Response
+    public function setShippingMethod(string $rateId, ?string $packageId = null): Response
     {
-        return $this->post('set-shipping-method', ['method_key' => $methodKey]);
+        $data = ['rate_id' => $rateId];
+
+        if ($packageId !== null && $packageId !== '') {
+            $data['package_id'] = $packageId;
+        }
+
+        return $this->post('set-shipping-method', $data);
     }
 
     /**
      * Calculate shipping for the cart
      *
-     * @param array $address Shipping address
+     * @deprecated There is no address-taking shipping-calculation endpoint
+     * in the CoCart REST API — `POST /cart/calculate/shipping` (what this
+     * method used to call) does not exist. To calculate shipping, call
+     * `updateCustomer()` with the destination address first (the server
+     * recalculates totals as part of that request); this method now just
+     * delegates to `calculate()`, ignoring `$address`. Prefer `calculate()`
+     * directly.
+     *
+     * @param array $address Unused; kept for backwards compatibility
      * @return Response
      */
-    public function calculateShipping(array $address): Response
+    public function calculateShipping(array $address = []): Response
     {
-        return $this->post('calculate/shipping', $address);
+        return $this->calculate();
     }
 
     /**

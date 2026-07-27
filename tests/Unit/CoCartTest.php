@@ -77,6 +77,74 @@ class CoCartTest extends TestCase
         $this->assertArrayNotHasKey('Cart-Key', $request['headers']);
     }
 
+    public function testCartKeySentAsLegacyHeaderWhenMainPluginIsLegacy(): void
+    {
+        $this->mockAdapter->queueResponse(200, [], '{}');
+
+        $client = $this->createClient([
+            'cart_key' => 'existing_key',
+            'main_plugin' => 'legacy',
+        ]);
+        $client->get('cart');
+
+        $request = $this->mockAdapter->getLastRequest();
+        $this->assertArrayHasKey('CoCart-API-Cart-Key', $request['headers']);
+        $this->assertSame('existing_key', $request['headers']['CoCart-API-Cart-Key']);
+        $this->assertArrayNotHasKey('Cart-Key', $request['headers']);
+    }
+
+    public function testOnlyOneCartKeyHeaderIsEverSent(): void
+    {
+        $this->mockAdapter->queueResponse(200, [], '{}');
+        $this->mockAdapter->queueResponse(200, [], '{}');
+
+        $basicClient = $this->createClient(['cart_key' => 'key1']);
+        $basicClient->get('cart');
+        $basicRequest = $this->mockAdapter->getLastRequest();
+        $this->assertCount(1, array_intersect(['Cart-Key', 'CoCart-API-Cart-Key'], array_keys($basicRequest['headers'])));
+
+        $legacyClient = $this->createClient(['cart_key' => 'key2', 'main_plugin' => 'legacy']);
+        $legacyClient->get('cart');
+        $legacyRequest = $this->mockAdapter->getLastRequest();
+        $this->assertCount(1, array_intersect(['Cart-Key', 'CoCart-API-Cart-Key'], array_keys($legacyRequest['headers'])));
+    }
+
+    // --- Retry backoff jitter ---
+
+    public function testRetryDelayAppliesJitterWithinExpectedRange(): void
+    {
+        $client = $this->createClient();
+
+        $reflection = new \ReflectionMethod($client, 'getRetryDelaySeconds');
+        $reflection->setAccessible(true);
+
+        for ($attempt = 1; $attempt <= 4; $attempt++) {
+            $base = min((int) pow(2, $attempt - 1), 30);
+            $delay = $reflection->invoke($client, $attempt);
+
+            $this->assertGreaterThanOrEqual((int) round($base * 0.8), $delay);
+            $this->assertLessThanOrEqual((int) round($base * 1.2) + 1, $delay);
+        }
+    }
+
+    public function testRetryDelayIsNotAlwaysTheSameValue(): void
+    {
+        $client = $this->createClient();
+
+        $reflection = new \ReflectionMethod($client, 'getRetryDelaySeconds');
+        $reflection->setAccessible(true);
+
+        $delays = [];
+        for ($i = 0; $i < 25; $i++) {
+            $delays[] = $reflection->invoke($client, 4); // base = 8s, wide enough to show jitter spread
+        }
+
+        // With ±20% jitter on an 8s base, we expect at least some variance
+        // across enough samples — this isn't a proof of randomness, just a
+        // guard against a jitter implementation that's silently a no-op.
+        $this->assertGreaterThan(1, count(array_unique($delays)));
+    }
+
     public function testCartKeyAlsoSentAsQueryParam(): void
     {
         $this->mockAdapter->queueResponse(200, [], '{}');
