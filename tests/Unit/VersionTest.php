@@ -76,7 +76,7 @@ class VersionTest extends TestCase
     {
         $exception = new VersionException('products()->findBySlug');
         $this->assertStringContainsString('products()->findBySlug', $exception->getMessage());
-        $this->assertStringContainsString('CoCart Basic', $exception->getMessage());
+        $this->assertStringContainsString('CoCart Starter', $exception->getMessage());
     }
 
     // --- Basic-only guards throw on legacy ---

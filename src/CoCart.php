@@ -621,7 +621,7 @@ class CoCart implements CoCartInterface
     }
 
     /**
-     * Guard that throws if a method requires CoCart Basic but the SDK
+     * Guard that throws if a method requires CoCart Starter but the SDK
      * is configured for the legacy plugin.
      *
      * @param string $method The method name for the error message
@@ -1253,7 +1253,7 @@ class CoCart implements CoCartInterface
                 unset($params['_fields']);
             }
         } else {
-            // CoCart Basic uses WordPress standard '_fields'
+            // CoCart Starter uses WordPress standard '_fields'
             if (isset($params['fields']) && !isset($params['_fields'])) {
                 $params['_fields'] = $params['fields'];
                 unset($params['fields']);

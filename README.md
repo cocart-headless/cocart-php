@@ -9,7 +9,7 @@
 
 The Official PHP SDK for the [CoCart REST API](https://docs.cocartapi.com).
 
-> Supports API v2 for both **CoCart Basic** and the **legacy CoCart plugin** (`cart-rest-api-for-woocommerce` v4.x).
+> Supports API v2 for both **CoCart Starter** and the **CoCart Community plugin** (`cart-rest-api-for-woocommerce` v4.x).
 
 > [!IMPORTANT]
 > This SDK is still in development and not yet ready for production use. Provide feedback if you experience a bug.
@@ -26,7 +26,7 @@ The Official PHP SDK for the [CoCart REST API](https://docs.cocartapi.com).
 ## Requirements
 
 - PHP 8.2 or higher
-- CoCart Basic plugin installed on your WooCommerce store
+- CoCart Starter plugin installed on your WooCommerce store
 - One of: Guzzle (recommended), cURL, or PHP Streams
 
 ## Support Policy
@@ -100,7 +100,7 @@ $client = new CoCart('https://your-store.com', [
     'verify_ssl'        => true,
     'rest_prefix'       => 'wp-json',                // Custom REST prefix
     'namespace'         => 'cocart',                 // Custom namespace - Only supported if you have the WhiteLabel add-on
-    'main_plugin'       => 'basic',                   // 'basic' (default) or 'legacy' for legacy CoCart plugin
+    'main_plugin'       => 'basic',                   // 'basic' (default) or 'legacy' for CoCart Community plugin
     'etag'              => true,                     // ETag conditional requests (default true)
     'auto_storage'      => true,                     // Auto-persist cart key to $_SESSION
     'session_key'       => 'cocart_cart_key',        // Session key name

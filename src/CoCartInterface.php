@@ -321,7 +321,7 @@ interface CoCartInterface
     public function setMainPlugin(string $mainPlugin): static;
 
     /**
-     * Guard that throws if a method requires CoCart Basic
+     * Guard that throws if a method requires CoCart Starter
      *
      * @param string $method The method name for the error message
      * @return void
