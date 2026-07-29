@@ -83,9 +83,13 @@ class Cart extends Endpoint
     }
 
     /**
-     * Add an item to the cart
+     * Add an item to the cart.
      *
-     * @param string|int $productId   Product ID or variation ID
+     * `productId` accepts a numeric product/variation ID or a SKU — the
+     * server resolves a non-numeric `id` before falling back to a 404,
+     * so this SDK doesn't restrict the type here either.
+     *
+     * @param string|int $productId   Product/variation ID (number or numeric string), or a SKU
      * @param int        $quantity    Quantity to add
      * @param array      $options     Additional options:
      *                                - variation: array (variation attributes)
@@ -602,12 +606,12 @@ class Cart extends Endpoint
     /**
      * Shorthand: Add a variable product to cart
      *
-     * @param int   $variationId Variation ID
-     * @param int   $quantity    Quantity
-     * @param array $attributes  Variation attributes (e.g., ['attribute_pa_color' => 'blue'])
+     * @param int|string $variationId Variation ID, or a SKU
+     * @param int        $quantity    Quantity
+     * @param array      $attributes  Variation attributes (e.g., ['attribute_pa_color' => 'blue'])
      * @return Response
      */
-    public function addVariation(int $variationId, int $quantity = 1, array $attributes = []): Response
+    public function addVariation(int|string $variationId, int $quantity = 1, array $attributes = []): Response
     {
         return $this->addItem($variationId, $quantity, [
             'variation' => $attributes,

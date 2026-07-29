@@ -33,6 +33,31 @@ class ProductsEndpointTest extends TestCase
         ));
     }
 
+    // --- find ---
+
+    public function testFindSendsCorrectRequestForNumericId(): void
+    {
+        $this->mockAdapter->queueResponse(200, [], '{"id":278}');
+
+        $client = $this->createClient();
+        $client->products()->find(278);
+
+        $request = $this->mockAdapter->getLastRequest();
+        $this->assertSame('GET', $request['method']);
+        $this->assertStringContainsString('/products/278', $request['url']);
+    }
+
+    public function testFindAcceptsSkuString(): void
+    {
+        $this->mockAdapter->queueResponse(200, [], '{"sku":"PCT-2024"}');
+
+        $client = $this->createClient();
+        $client->products()->find('PCT-2024');
+
+        $request = $this->mockAdapter->getLastRequest();
+        $this->assertStringContainsString('/products/PCT-2024', $request['url']);
+    }
+
     // --- findBySlug ---
 
     public function testFindBySlugSendsCorrectRequest(): void

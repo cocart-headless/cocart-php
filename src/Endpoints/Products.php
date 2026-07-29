@@ -48,13 +48,16 @@ class Products extends Endpoint
     }
 
     /**
-     * Get a single product
+     * Get a single product by ID or SKU.
      *
-     * @param int   $productId Product ID
-     * @param array $params    Query parameters
+     * `GET /products/{id}` accepts either the numeric product/variation ID
+     * or the product's SKU in the same path segment.
+     *
+     * @param int|string $productId Product/variation ID, or a SKU
+     * @param array      $params    Query parameters
      * @return Response
      */
-    public function find(int $productId, array $params = []): Response
+    public function find(int|string $productId, array $params = []): Response
     {
         return $this->get((string) $productId, $params);
     }

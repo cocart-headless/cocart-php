@@ -77,6 +77,45 @@ class CartEndpointTest extends TestCase
         $this->assertStringContainsString('/cart/item/abc_item_key', $request['url']);
     }
 
+    // --- cart()->addItem() ---
+
+    public function testAddItemSendsNumericProductIdAsString(): void
+    {
+        $this->mockAdapter->queueResponse(200, [], '{"cart_key":"ck_1"}');
+
+        $client = $this->createClient();
+        $client->cart()->addItem(123, 2);
+
+        $request = $this->mockAdapter->getLastRequest();
+        $body = json_decode($request['body'], true);
+        $this->assertSame('123', $body['id']);
+        $this->assertSame('2', $body['quantity']);
+    }
+
+    public function testAddItemAcceptsSkuString(): void
+    {
+        $this->mockAdapter->queueResponse(200, [], '{"cart_key":"ck_1"}');
+
+        $client = $this->createClient();
+        $client->cart()->addItem('BLUE-SHIRT-L', 1);
+
+        $request = $this->mockAdapter->getLastRequest();
+        $body = json_decode($request['body'], true);
+        $this->assertSame('BLUE-SHIRT-L', $body['id']);
+    }
+
+    public function testAddVariationAcceptsSkuString(): void
+    {
+        $this->mockAdapter->queueResponse(200, [], '{"cart_key":"ck_1"}');
+
+        $client = $this->createClient();
+        $client->cart()->addVariation('VAR-SKU-1', 1, ['attribute_pa_color' => 'blue']);
+
+        $request = $this->mockAdapter->getLastRequest();
+        $body = json_decode($request['body'], true);
+        $this->assertSame('VAR-SKU-1', $body['id']);
+    }
+
     // --- cart()->addItems() ---
 
     public function testAddItemsPostsGroupedProductWithMapShorthand(): void

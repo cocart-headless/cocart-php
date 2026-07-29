@@ -57,6 +57,9 @@ $response = $client->cart()->addItem(123, 2);
 
 // Shorthand
 $response = $client->cart()->add(123, 2);
+
+// A SKU also works — the server resolves it to a product ID
+$response = $client->cart()->addItem('BLUE-SHIRT-L', 1);
 ```
 
 ### Add with Options
