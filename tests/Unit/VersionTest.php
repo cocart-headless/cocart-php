@@ -42,10 +42,10 @@ class VersionTest extends TestCase
 
     // --- Default main plugin ---
 
-    public function testDefaultMainPluginIsBasic(): void
+    public function testDefaultMainPluginIsStarter(): void
     {
         $client = $this->createClient();
-        $this->assertSame('basic', $client->getMainPlugin());
+        $this->assertSame('starter', $client->getMainPlugin());
     }
 
     // --- Fluent setter ---

@@ -26,6 +26,7 @@ use CoCart\Exceptions\ValidationException;
 use CoCart\Exceptions\VersionException;
 use CoCart\Endpoints\Account;
 use CoCart\Endpoints\Cart;
+use CoCart\Endpoints\Checkout;
 use CoCart\Endpoints\Products;
 use CoCart\Endpoints\Store;
 use CoCart\Endpoints\Sessions;
@@ -133,11 +134,11 @@ class CoCart implements CoCartInterface
     protected ?string $consumerSecret = null;
 
     /**
-     * CoCart main plugin identifier ('basic' or 'legacy')
+     * CoCart main plugin identifier ('starter' or 'legacy')
      *
      * @var string
      */
-    protected string $mainPlugin = 'basic';
+    protected string $mainPlugin = 'starter';
 
     /**
      * Maximum number of retries for transient failures
@@ -245,6 +246,13 @@ class CoCart implements CoCartInterface
     protected ?Store $store = null;
 
     /**
+     * Checkout endpoint instance
+     *
+     * @var Checkout|null
+     */
+    protected ?Checkout $checkout = null;
+
+    /**
      * Sessions endpoint instance
      *
      * @var Sessions|null
@@ -279,7 +287,7 @@ class CoCart implements CoCartInterface
      *                         - http_adapter: string|HttpAdapterInterface (guzzle, curl, wordpress, stream, or instance)
      *                         - session_key: string (PHP session key for cart key storage, default 'cocart_cart_key')
      *                         - auto_storage: bool (auto-persist cart key to $_SESSION, default true)
-     *                         - max_retries: int (retry transient failures up to N times, default 0)
+     *                         - max_retries: int (retry transient failures up to N times, default 0; see setMaxRetries())
      *                         - etag: bool (enable ETag conditional requests, default true)
      */
     public function __construct(string $storeUrl, array $options = [])
@@ -531,7 +539,8 @@ class CoCart implements CoCartInterface
     }
 
     /**
-     * Set the maximum number of retries for transient failures (429, 503, timeouts)
+     * Set the maximum number of retries for transient failures: a 429 for any
+     * request, a 503 or timeout for a GET only, so an order is never placed twice.
      *
      * @param int $retries Maximum retry attempts (0 to disable)
      * @return $this
@@ -601,7 +610,7 @@ class CoCart implements CoCartInterface
     /**
      * Get the configured CoCart main plugin identifier
      *
-     * @return string 'basic' or 'legacy'
+     * @return string 'starter' or 'legacy'
      */
     public function getMainPlugin(): string
     {
@@ -611,7 +620,7 @@ class CoCart implements CoCartInterface
     /**
      * Set the CoCart main plugin identifier
      *
-     * @param string $mainPlugin 'basic' or 'legacy'
+     * @param string $mainPlugin 'starter' or 'legacy'
      * @return $this
      */
     public function setMainPlugin(string $mainPlugin): static
@@ -628,7 +637,7 @@ class CoCart implements CoCartInterface
      * @return void
      * @throws VersionException
      */
-    public function requiresBasic(string $method): void
+    public function requiresStarter(string $method): void
     {
         if ($this->mainPlugin === 'legacy') {
             throw new VersionException($method);
@@ -869,6 +878,19 @@ class CoCart implements CoCartInterface
     }
 
     /**
+     * Get Checkout endpoint (CoCart Plus)
+     *
+     * @return Checkout
+     */
+    public function checkout(): Checkout
+    {
+        if ($this->checkout === null) {
+            $this->checkout = new Checkout($this);
+        }
+        return $this->checkout;
+    }
+
+    /**
      * Get Products endpoint
      *
      * @return Products
@@ -981,6 +1003,11 @@ class CoCart implements CoCartInterface
      * with an authentication error, the token will be refreshed and the
      * request retried once.
      *
+     * If a guest's cart no longer exists (CoCart Starter 5 refuses the cart
+     * key with `cocart_invalid_cart`, for example after the cart expired),
+     * the stored cart key is forgotten and the request retried once as a
+     * new guest.
+     *
      * @param string     $method   HTTP method
      * @param string     $endpoint API endpoint
      * @param array      $params   Query parameters
@@ -989,6 +1016,35 @@ class CoCart implements CoCartInterface
      * @throws CoCartException
      */
     public function request(string $method, string $endpoint, array $params = [], ?array $data = null): Response
+    {
+        try {
+            return $this->executeRequestWithAuthRefresh($method, $endpoint, $params, $data);
+        } catch (CoCartException $e) {
+            // The stored guest cart no longer exists (e.g. it expired). CoCart
+            // refuses the request before running it, so forget the key and
+            // retry once as a new guest.
+            if ($e->getErrorCode() !== 'cocart_invalid_cart' || $this->cartKey === null || $this->isAuthenticated()) {
+                throw $e;
+            }
+
+            $this->forgetCartKey();
+        }
+
+        return $this->executeRequestWithAuthRefresh($method, $endpoint, $params, $data);
+    }
+
+    /**
+     * Execute a request, refreshing the JWT and retrying once on an
+     * authentication error when auto-refresh is on
+     *
+     * @param string     $method   HTTP method
+     * @param string     $endpoint API endpoint
+     * @param array      $params   Query parameters
+     * @param array|null $data     Request body data
+     * @return Response
+     * @throws CoCartException
+     */
+    private function executeRequestWithAuthRefresh(string $method, string $endpoint, array $params, ?array $data): Response
     {
         try {
             return $this->executeRequest($method, $endpoint, $params, $data);
@@ -1016,16 +1072,20 @@ class CoCart implements CoCartInterface
      * Make an HTTP request using a full REST route (relative to the REST prefix)
      *
      * Unlike request(), this does NOT prepend the namespace/version prefix.
-     * Used for endpoints outside the standard versioned namespace (e.g., jwt/*).
+     * Used for endpoints outside the standard versioned namespace (e.g., jwt/*)
+     * and for the CoCart Plus routes. It is never sent again, whatever
+     * `max_retries` says: a raw request can take payment.
      *
-     * @param string     $method HTTP method
-     * @param string     $route  Full REST route relative to the REST prefix
-     * @param array      $params Query parameters
-     * @param array|null $data   Request body data
+     * @param string     $method  HTTP method
+     * @param string     $route   Full REST route relative to the REST prefix
+     * @param array      $params  Query parameters
+     * @param array|null $data    Request body data
+     * @param array      $options Request options:
+     *                            - omit_cart_key: bool (don't send the cart key, for routes that refuse one)
      * @return Response
      * @throws CoCartException
      */
-    public function requestRaw(string $method, string $route, array $params = [], ?array $data = null): Response
+    public function requestRaw(string $method, string $route, array $params = [], ?array $data = null, array $options = []): Response
     {
         $url = sprintf('%s/%s/%s', $this->storeUrl, $this->restPrefix, ltrim($route, '/'));
 
@@ -1033,7 +1093,7 @@ class CoCart implements CoCartInterface
             $url .= '?' . http_build_query($params);
         }
 
-        $headers = $this->buildHeaders();
+        $headers = $this->buildHeaders(empty($options['omit_cart_key']));
         $body = $data !== null ? json_encode($data, JSON_THROW_ON_ERROR) : null;
 
         $httpResponse = $this->getHttpAdapter()->request(
@@ -1114,8 +1174,10 @@ class CoCart implements CoCartInterface
                     $adapterOptions
                 );
             } catch (CoCartException $e) {
-                // Retry on timeout/connection errors
-                if ($attempt < $this->maxRetries && $this->isTransientError($e)) {
+                // Retry on timeout/connection errors, for a GET only: a request that changes
+                // something may have run before the connection dropped, and running it twice
+                // could, for example, charge a card twice.
+                if ($attempt < $this->maxRetries && $method === 'GET' && $this->isTransientError($e)) {
                     $attempt++;
                     $this->retrySleep($attempt);
                     continue;
@@ -1139,8 +1201,12 @@ class CoCart implements CoCartInterface
             // Extract cart key from response headers for guest sessions
             $this->extractCartKeyFromHeaders($this->lastResponse);
 
-            // Store ETag + body from a fresh (non-304) response for future conditional requests
-            if ($this->etagEnabled && $method === 'GET' && !$isNotModified) {
+            // Store ETag + body from a fresh (non-304) response for future conditional
+            // requests, unless the store says not to keep it (`no-store` or `private`:
+            // CoCart Plus checkout, order and account responses)
+            if ($this->etagEnabled && $method === 'GET' && !$isNotModified
+                && self::mayStore($this->lastResponse->getHeader('Cache-Control'))
+            ) {
                 $etag = $this->lastResponse->getETag();
                 if ($etag !== null) {
                     $this->etagCache[$url] = [
@@ -1151,8 +1217,8 @@ class CoCart implements CoCartInterface
                 }
             }
 
-            // Retry on transient HTTP status codes (429, 503)
-            if ($attempt < $this->maxRetries && $this->isRetryableStatus($httpResponse->statusCode)) {
+            // Retry on transient HTTP status codes (429, and 503 for a GET)
+            if ($attempt < $this->maxRetries && $this->isRetryableStatus($httpResponse->statusCode, $method)) {
                 $attempt++;
                 $this->retrySleep($attempt, $this->lastResponse);
                 continue;
@@ -1184,32 +1250,61 @@ class CoCart implements CoCartInterface
     /**
      * Check if an HTTP status code is retryable
      *
-     * @param int $statusCode HTTP status code
+     * A 429 is refused before the request runs, so any method can be sent
+     * again. A 503 can come from a proxy after the store has run the request,
+     * so only a GET is.
+     *
+     * @param int    $statusCode HTTP status code
+     * @param string $method     HTTP method
      * @return bool
      */
-    protected function isRetryableStatus(int $statusCode): bool
+    protected function isRetryableStatus(int $statusCode, string $method = 'GET'): bool
     {
-        return $statusCode === 429 || $statusCode === 503;
+        return $statusCode === 429 || ($statusCode === 503 && $method === 'GET');
     }
 
     /**
      * Sleep before retrying with exponential backoff
      *
      * @param int           $attempt  Current attempt number (1-based)
-     * @param Response|null $response Last response (to check Retry-After header)
+     * @param Response|null $response Last response (to check its retry headers)
      */
     protected function retrySleep(int $attempt, ?Response $response = null): void
     {
-        // Honor Retry-After header if present
+        $this->pause($this->getRetryDelay($attempt, $response));
+    }
+
+    /**
+     * How long to wait (in seconds) before a retry
+     *
+     * Honors the wait the response asks for, capped at 60 seconds: CoCart Plus
+     * sends `RateLimit-Retry-After`, and a proxy may send `Retry-After`.
+     * Otherwise backs off exponentially.
+     *
+     * @param int           $attempt  Current attempt number (1-based)
+     * @param Response|null $response Last response
+     * @return int Delay in whole seconds
+     */
+    protected function getRetryDelay(int $attempt, ?Response $response = null): int
+    {
         if ($response !== null) {
-            $retryAfter = $response->getHeader('Retry-After');
+            $retryAfter = $response->getHeader('RateLimit-Retry-After') ?? $response->getHeader('Retry-After');
             if ($retryAfter !== null && is_numeric($retryAfter)) {
-                sleep(min((int) $retryAfter, 60));
-                return;
+                return max(0, min((int) $retryAfter, 60));
             }
         }
 
-        sleep($this->getRetryDelaySeconds($attempt));
+        return $this->getRetryDelaySeconds($attempt);
+    }
+
+    /**
+     * Wait before a retry
+     *
+     * @param int $seconds Seconds to wait
+     */
+    protected function pause(int $seconds): void
+    {
+        sleep($seconds);
     }
 
     /**
@@ -1279,9 +1374,10 @@ class CoCart implements CoCartInterface
     /**
      * Build request headers
      *
+     * @param bool $includeCartKey Whether to send the cart key header
      * @return array
      */
-    protected function buildHeaders(): array
+    protected function buildHeaders(bool $includeCartKey = true): array
     {
         $headers = [
             'Accept' => 'application/json',
@@ -1309,7 +1405,7 @@ class CoCart implements CoCartInterface
         // Basic/Starter allows 'Cart-Key', the legacy/community plugin allows
         // 'CoCart-API-Cart-Key'), never both. Sending both would cause the
         // preflight to reject the one name that store doesn't recognize.
-        if ($this->cartKey && !$this->isAuthenticated()) {
+        if ($includeCartKey && $this->cartKey && !$this->isAuthenticated()) {
             $cartKeyHeader = $this->mainPlugin === 'legacy' ? 'CoCart-API-Cart-Key' : 'Cart-Key';
             $headers[$cartKeyHeader] = $this->cartKey;
         }
@@ -1335,6 +1431,19 @@ class CoCart implements CoCartInterface
                 $this->ensureSessionStarted();
                 $_SESSION[$this->sessionKey] = $cartKey;
             }
+        }
+    }
+
+    /**
+     * Forget the cart key, here and in the PHP session
+     */
+    private function forgetCartKey(): void
+    {
+        $this->cartKey = null;
+
+        if ($this->autoStorage) {
+            $this->ensureSessionStarted();
+            unset($_SESSION[$this->sessionKey]);
         }
     }
 
@@ -1371,12 +1480,32 @@ class CoCart implements CoCartInterface
             throw new AuthenticationException($message, $httpCode, $code, $data);
         }
 
+        // A refused state (409), a rate limit (429) or the server's fault (5xx) is
+        // never a validation error, whatever its code says (e.g.
+        // `cocart_order_invalid_status` is a 409)
+        if ($httpCode === 409 || $httpCode === 429 || $httpCode >= 500) {
+            throw new CoCartException($message, $httpCode, $code, $data);
+        }
+
         // Validation errors
         if ($httpCode === 400 || str_contains($code, 'invalid') || str_contains($code, 'missing')) {
             throw new ValidationException($message, $httpCode, $code, $data);
         }
 
         throw new CoCartException($message, $httpCode, $code, $data);
+    }
+
+    /**
+     * Whether a response may be kept in the ETag cache: not when its
+     * `Cache-Control` says `no-store` or `private`
+     *
+     * @param string|null $cacheControl The Cache-Control header
+     * @return bool
+     */
+    private static function mayStore(?string $cacheControl): bool
+    {
+        return $cacheControl === null
+            || preg_match('/(^|[\s,])(no-store|private)([\s,;=]|$)/i', $cacheControl) !== 1;
     }
 
     /**
@@ -1409,12 +1538,7 @@ class CoCart implements CoCartInterface
         $this->auth = [];
         $this->jwtToken = null;
         $this->refreshToken = null;
-        $this->cartKey = null;
-
-        if ($this->autoStorage) {
-            $this->ensureSessionStarted();
-            unset($_SESSION[$this->sessionKey]);
-        }
+        $this->forgetCartKey();
 
         return $this;
     }

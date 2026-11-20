@@ -183,10 +183,14 @@ echo "Customer details updated!\n";
 // delegates to calculate() now. Call calculate() directly instead.
 $client->cart()->calculate();
 
-// Get shipping methods
+// Get shipping methods: one package per shipment, each with its rates
 $methods = $client->cart()->getShippingMethods();
 echo "Available shipping methods:\n";
-print_r($methods->toArray());
+foreach ($methods->getShippingMethods() as $package) {
+    foreach ($package['rates'] as $rateId => $rate) {
+        echo "- {$rateId}: {$rate['label']} ({$rate['cost']})\n"; // cost in minor units
+    }
+}
 
 // Set shipping method
 $client->cart()->setShippingMethod('flat_rate:1');
@@ -505,9 +509,10 @@ $client->cart()->calculate();
 echo "Step 4: Shipping calculated\n";
 
 // Step 5: Get shipping methods and select one
-$shippingMethods = $client->cart()->getShippingMethods();
-// Select first available method
-$client->cart()->setShippingMethod('flat_rate:1');
+$packages = $client->cart()->getShippingMethods()->getShippingMethods();
+// Select the first available rate
+$firstRateId = array_key_first($packages[0]['rates'] ?? []) ?? 'flat_rate:1';
+$client->cart()->setShippingMethod($firstRateId);
 echo "Step 5: Shipping method selected\n";
 
 // Step 6: Calculate final totals

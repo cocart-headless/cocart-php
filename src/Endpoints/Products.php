@@ -12,6 +12,7 @@ declare(strict_types=1);
 
 namespace CoCart\Endpoints;
 
+use CoCart\Exceptions\CoCartException;
 use CoCart\Response;
 
 class Products extends Endpoint
@@ -38,7 +39,7 @@ class Products extends Endpoint
      *                      - min_price: string
      *                      - max_price: string
      *                      - stock_status: string
-     *                      - orderby: string
+     *                      - orderby: string (see sortBy() for the sort orders CoCart accepts)
      *                      - order: string (asc/desc)
      * @return Response
      */
@@ -71,7 +72,7 @@ class Products extends Endpoint
      */
     public function findBySlug(string $slug, array $params = []): Response
     {
-        $this->client->requiresBasic('products()->findBySlug');
+        $this->client->requiresStarter('products()->findBySlug');
         return $this->get($slug, $params);
     }
 
@@ -160,9 +161,16 @@ class Products extends Endpoint
     /**
      * Get products sorted by a field
      *
-     * @param string $field Field to sort by (date, id, title, slug, price, popularity, rating)
-     * @param string $order Sort direction (asc or desc)
-     * @param array  $params Additional parameters
+     * The sort orders CoCart accepts: date, id, menu_order, include, title,
+     * slug, name, alphabetical, reverse_alpha, popularity, sales, rating,
+     * review_count, by_stock, on_sale_first, featured_first, price_asc and
+     * price_desc, plus relevance (with a search term) and rand with CoCart
+     * Starter. Sort by price with `price_asc` or `price_desc`: CoCart
+     * rejects `price`.
+     *
+     * @param 'date'|'id'|'menu_order'|'include'|'title'|'slug'|'name'|'alphabetical'|'reverse_alpha'|'popularity'|'sales'|'rating'|'review_count'|'by_stock'|'on_sale_first'|'featured_first'|'price_asc'|'price_desc'|'relevance'|'rand' $field Sort order
+     * @param 'asc'|'desc' $order  Sort direction
+     * @param array        $params Additional parameters
      * @return Response
      */
     public function sortBy(string $field, string $order = 'asc', array $params = []): Response
@@ -222,7 +230,7 @@ class Products extends Endpoint
      */
     public function variation(int $productId, int $variationId, array $params = []): Response
     {
-        $this->client->requiresBasic('products()->variation');
+        $this->client->requiresStarter('products()->variation');
         return $this->get("{$productId}/variations/{$variationId}", $params);
     }
 
@@ -246,7 +254,7 @@ class Products extends Endpoint
      */
     public function category(int $categoryId, array $params = []): Response
     {
-        $this->client->requiresBasic('products()->category');
+        $this->client->requiresStarter('products()->category');
         return $this->get("categories/{$categoryId}", $params);
     }
 
@@ -270,7 +278,7 @@ class Products extends Endpoint
      */
     public function tag(int $tagId, array $params = []): Response
     {
-        $this->client->requiresBasic('products()->tag');
+        $this->client->requiresStarter('products()->tag');
         return $this->get("tags/{$tagId}", $params);
     }
 
@@ -331,7 +339,7 @@ class Products extends Endpoint
      */
     public function attributeBySlug(string $slug, array $params = []): Response
     {
-        $this->client->requiresBasic('products()->attributeBySlug');
+        $this->client->requiresStarter('products()->attributeBySlug');
         return $this->get("attributes/{$slug}", $params);
     }
 
@@ -344,7 +352,7 @@ class Products extends Endpoint
      */
     public function attributeTermsBySlug(string $slug, array $params = []): Response
     {
-        $this->client->requiresBasic('products()->attributeTermsBySlug');
+        $this->client->requiresStarter('products()->attributeTermsBySlug');
         return $this->get("attributes/{$slug}/terms", $params);
     }
 
@@ -358,7 +366,7 @@ class Products extends Endpoint
      */
     public function attributeTermBySlug(string $attributeSlug, string $termSlug, array $params = []): Response
     {
-        $this->client->requiresBasic('products()->attributeTermBySlug');
+        $this->client->requiresStarter('products()->attributeTermBySlug');
         return $this->get("attributes/{$attributeSlug}/terms/{$termSlug}", $params);
     }
 
@@ -370,7 +378,7 @@ class Products extends Endpoint
      */
     public function brands(array $params = []): Response
     {
-        $this->client->requiresBasic('products()->brands');
+        $this->client->requiresStarter('products()->brands');
         return $this->get('brands', $params);
     }
 
@@ -383,7 +391,7 @@ class Products extends Endpoint
      */
     public function brand(int $brandId, array $params = []): Response
     {
-        $this->client->requiresBasic('products()->brand');
+        $this->client->requiresStarter('products()->brand');
         return $this->get("brands/{$brandId}", $params);
     }
 
@@ -396,7 +404,7 @@ class Products extends Endpoint
      */
     public function byBrand(string $brandSlug, array $params = []): Response
     {
-        $this->client->requiresBasic('products()->byBrand');
+        $this->client->requiresStarter('products()->byBrand');
         $params['brand'] = $brandSlug;
         return $this->all($params);
     }
@@ -454,6 +462,64 @@ class Products extends Endpoint
     }
 
     /**
+     * Post a product review
+     *
+     * Guests give `reviewer` and `reviewer_email`; stores that only allow
+     * verified owners check the email against past orders.
+     *
+     * @param array{product_id: int, review: string, rating?: int, reviewer?: string, reviewer_email?: string} $data
+     *        The review: product_id, review, and optionally rating (1-5), reviewer and reviewer_email
+     * @return Response
+     */
+    public function createReview(array $data): Response
+    {
+        return $this->post('reviews', $data);
+    }
+
+    /**
+     * Get shipping rates for a product before it's added to the cart (requires CoCart Plus)
+     *
+     * `$productId` may be a variation ID or a SKU. Sent without the cart key:
+     * the route prices a simulated cart and refuses one
+     * (`400 cocart_calculate_product_shipping_rates_cart_access_denied`).
+     * External and grouped products can't be priced (`400`).
+     *
+     * @param int|string $productId Product/variation ID, or a SKU
+     * @param array{quantity?: int, variation?: array<string, string>, item_data?: array<string, string>} $params
+     *        quantity (default 1), variation attributes (e.g. ['attribute_pa_color' => 'blue'])
+     *        and item_data that makes the item unique
+     * @return Response
+     */
+    public function shippingRates(int|string $productId, array $params = []): Response
+    {
+        $query = [];
+
+        if (isset($params['quantity'])) {
+            $query['quantity'] = (string) $params['quantity'];
+        }
+
+        foreach ($params['variation'] ?? [] as $key => $value) {
+            $query["variation[{$key}]"] = (string) $value;
+        }
+
+        foreach ($params['item_data'] ?? [] as $key => $value) {
+            $query["item_data[{$key}]"] = (string) $value;
+        }
+
+        $route = sprintf(
+            '%s/v2/products/%s/shipping-rates',
+            $this->client->getNamespace(),
+            rawurlencode((string) $productId)
+        );
+
+        try {
+            return $this->client->requestRaw('GET', $route, $query, null, ['omit_cart_key' => true]);
+        } catch (CoCartException $e) {
+            $this->handleNoRoute($e);
+        }
+    }
+
+    /**
      * Get reviews written by the authenticated user
      *
      * @param array $params Query parameters
@@ -461,7 +527,7 @@ class Products extends Endpoint
      */
     public function myReviews(array $params = []): Response
     {
-        $this->client->requiresBasic('products()->myReviews');
+        $this->client->requiresStarter('products()->myReviews');
         return $this->get('reviews/mine', $params);
     }
 

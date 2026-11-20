@@ -66,7 +66,10 @@ class GuzzleAdapter implements HttpAdapterInterface
                 (string) $response->getBody()
             );
         } catch (\GuzzleHttp\Exception\GuzzleException $e) {
-            throw new CoCartException("Guzzle HTTP Error: " . $e->getMessage(), 0, null, $e);
+            // Guzzle's message ends with the request URL, whose query string can carry
+            // the cart key, so it's stripped; the Guzzle exception isn't chained for the
+            // same reason.
+            throw new CoCartException("Guzzle HTTP Error: " . SafeErrorMessage::from($e->getMessage()));
         }
     }
 

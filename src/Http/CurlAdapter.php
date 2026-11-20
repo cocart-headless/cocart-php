@@ -81,7 +81,7 @@ class CurlAdapter implements HttpAdapterInterface
             $error = curl_error($ch);
             $errno = curl_errno($ch);
             curl_close($ch);
-            throw new CoCartException("cURL Error ({$errno}): {$error}");
+            throw new CoCartException("cURL Error ({$errno}): " . SafeErrorMessage::from($error));
         }
 
         $statusCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);

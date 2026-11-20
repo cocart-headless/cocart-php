@@ -695,4 +695,120 @@ class CoCartTest extends TestCase
         // Tokens should still be cleared locally
         $this->assertFalse($client->isAuthenticated());
     }
+
+    // --- Recovering from a cart key CoCart no longer has ---
+
+    private function queueInvalidCart(): void
+    {
+        $this->mockAdapter->queueResponse(404, [], json_encode([
+            'code' => 'cocart_invalid_cart',
+            'message' => 'The cart requested is invalid.',
+            'data' => ['status' => 404],
+        ]));
+    }
+
+    public function testInvalidCartForgetsTheStoredKeyAndRetriesOnceAsANewGuest(): void
+    {
+        $_SESSION['cocart_cart_key'] = 't_expired';
+        $this->queueInvalidCart();
+        $this->mockAdapter->queueResponse(200, ['Cart-Key' => 't_new'], '{"items":[]}');
+
+        $client = new CoCart('https://store.example.com', [
+            'http_adapter' => $this->mockAdapter,
+            'auto_storage' => true,
+        ]);
+        $client->cart()->addItem(154, 1);
+
+        [$first, $retry] = $this->mockAdapter->getRequests();
+        $this->assertCount(2, $this->mockAdapter->getRequests());
+        $this->assertStringContainsString('cart_key=t_expired', $first['url']);
+        $this->assertStringNotContainsString('cart_key=', $retry['url']);
+        $this->assertArrayNotHasKey('Cart-Key', $retry['headers']);
+        $this->assertSame('POST', $retry['method']);
+        $this->assertSame($first['body'], $retry['body']);
+        $this->assertSame('t_new', $client->getCartKey());
+        $this->assertSame('t_new', $_SESSION['cocart_cart_key']);
+    }
+
+    public function testInvalidCartRetriesOnlyOnce(): void
+    {
+        $this->queueInvalidCart();
+        $this->queueInvalidCart();
+
+        $client = $this->createClient(['cart_key' => 't_expired']);
+
+        try {
+            $client->cart()->get();
+            $this->fail('Expected a CoCartException');
+        } catch (CoCartException $e) {
+            $this->assertSame('cocart_invalid_cart', $e->getErrorCode());
+        }
+
+        $this->assertCount(2, $this->mockAdapter->getRequests());
+    }
+
+    public function testInvalidCartIsNotRetriedWithoutACartKeyOrWhenAuthenticated(): void
+    {
+        foreach ([[], ['username' => 'user', 'password' => 'pass', 'cart_key' => 't_1']] as $options) {
+            $this->mockAdapter = new MockHttpAdapter();
+            $this->queueInvalidCart();
+
+            try {
+                $this->createClient($options)->cart()->get();
+                $this->fail('Expected a CoCartException');
+            } catch (CoCartException $e) {
+                $this->assertSame('cocart_invalid_cart', $e->getErrorCode());
+            }
+
+            $this->assertCount(1, $this->mockAdapter->getRequests());
+        }
+    }
+
+    public function testOtherErrorsLeaveTheCartKeyAlone(): void
+    {
+        $this->mockAdapter->queueResponse(404, [], json_encode([
+            'code' => 'cocart_item_not_in_cart',
+            'message' => 'Item specified does not exist in cart.',
+        ]));
+
+        $client = $this->createClient(['cart_key' => 't_live']);
+
+        try {
+            $client->cart()->removeItem('abc');
+            $this->fail('Expected a CoCartException');
+        } catch (CoCartException $e) {
+            $this->assertSame('cocart_item_not_in_cart', $e->getErrorCode());
+        }
+
+        $this->assertCount(1, $this->mockAdapter->getRequests());
+        $this->assertSame('t_live', $client->getCartKey());
+    }
+
+    // --- Request safety ---
+
+    public function testErrorMessagesNeverIncludeTheRequestUrlCartKeyOrCredentials(): void
+    {
+        $this->mockAdapter->queueResponse(400, [], json_encode([
+            'code' => 'cocart_coupon_invalid',
+            'message' => 'Coupon is not valid.',
+            'data' => ['status' => 400],
+        ]));
+
+        $client = $this->createClient([
+            'cart_key' => 't_secret_cart_key',
+            'consumer_key' => 'ck_live_secret',
+            'consumer_secret' => 'cs_live_secret',
+        ]);
+
+        try {
+            $client->cart()->applyCoupon('nope');
+            $this->fail('Expected a CoCartException');
+        } catch (CoCartException $e) {
+            $this->assertSame('Coupon is not valid.', $e->getMessage());
+            foreach (['t_secret_cart_key', 'ck_live_secret', 'cs_live_secret', 'store.example.com'] as $secret) {
+                $this->assertStringNotContainsString($secret, $e->getMessage());
+                $this->assertStringNotContainsString($secret, (string) $e);
+            }
+        }
+    }
 }

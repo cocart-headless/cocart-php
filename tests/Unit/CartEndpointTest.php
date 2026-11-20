@@ -359,4 +359,163 @@ class CartEndpointTest extends TestCase
         $this->assertStringNotContainsString('/cart/calculate/shipping', $request['url']);
         $this->assertArrayNotHasKey('country', $body ?? []);
     }
+
+    // --- coupons (CoCart Plus) ---
+
+    public function testApplyCouponSendsTheCodeAsCode(): void
+    {
+        // `code` is the parameter CoCart Plus requires; `coupon` is rejected.
+        $client = $this->createClient();
+        $client->cart()->applyCoupon('save10');
+
+        $request = $this->mockAdapter->getLastRequest();
+        $this->assertSame('POST', $request['method']);
+        $this->assertStringEndsWith('/cocart/v2/cart/apply-coupon', $request['url']);
+        $this->assertSame(['code' => 'save10'], json_decode($request['body'], true));
+    }
+
+    public function testApplyCouponAndCheckCouponsPassTheEmailWhenGiven(): void
+    {
+        $client = $this->createClient();
+        $client->cart()->applyCoupon('vip', 'jane@example.com');
+        $client->cart()->checkCoupons('jane@example.com');
+
+        [$apply, $check] = $this->mockAdapter->getRequests();
+        $this->assertSame(['code' => 'vip', 'email' => 'jane@example.com'], json_decode($apply['body'], true));
+        $this->assertSame('GET', $check['method']);
+        $this->assertStringEndsWith('/cocart/v2/cart/coupons/validate?email=jane%40example.com', $check['url']);
+    }
+
+    public function testCheckCouponsSendsNoEmailByDefault(): void
+    {
+        $client = $this->createClient();
+        $client->cart()->checkCoupons();
+
+        $this->assertStringEndsWith('/cocart/v2/cart/coupons/validate', $this->mockAdapter->getLastRequest()['url']);
+    }
+
+    public function testRemoveCouponEncodesTheCodeInThePath(): void
+    {
+        $client = $this->createClient();
+        foreach (['summer sale', '10%off', 'a#b?c', 'café'] as $code) {
+            $client->cart()->removeCoupon($code);
+        }
+
+        $paths = array_map(fn ($r) => parse_url($r['url'], PHP_URL_PATH), $this->mockAdapter->getRequests());
+        $this->assertSame([
+            '/wp-json/cocart/v2/cart/coupons/summer%20sale',
+            '/wp-json/cocart/v2/cart/coupons/10%25off',
+            '/wp-json/cocart/v2/cart/coupons/a%23b%3Fc',
+            '/wp-json/cocart/v2/cart/coupons/caf%C3%A9',
+        ], $paths);
+        foreach ($this->mockAdapter->getRequests() as $request) {
+            $this->assertSame('DELETE', $request['method']);
+        }
+    }
+
+    public function testRemoveCouponsAndRemoveAllItemsSendDeleteToCartCouponsAndCartItems(): void
+    {
+        $client = $this->createClient();
+        $client->cart()->removeCoupons();
+        $client->cart()->removeAllItems();
+
+        $calls = array_map(fn ($r) => $r['method'] . ' ' . parse_url($r['url'], PHP_URL_PATH), $this->mockAdapter->getRequests());
+        $this->assertSame([
+            'DELETE /wp-json/cocart/v2/cart/coupons',
+            'DELETE /wp-json/cocart/v2/cart/items',
+        ], $calls);
+    }
+
+    // --- getMini() (CoCart Plus) ---
+
+    public function testGetMiniReadsCartMini(): void
+    {
+        $client = $this->createClient();
+        $client->cart()->getMini();
+
+        $request = $this->mockAdapter->getLastRequest();
+        $this->assertSame('GET', $request['method']);
+        $this->assertStringEndsWith('/cocart/v2/cart/mini', $request['url']);
+    }
+
+    // --- addFee() (CoCart Plus) ---
+
+    public function testAddFeeSendsTheAmountAsAStringAndTaxClassOnlyWhenGiven(): void
+    {
+        $client = $this->createClient();
+        $client->cart()->addFee('Gift wrap', 2, true, 'reduced-rate');
+        $client->cart()->addFee('Handling', 1.5);
+
+        [$wrap, $handling] = $this->mockAdapter->getRequests();
+        $this->assertStringEndsWith('/cocart/v2/cart/add-fee', $wrap['url']);
+        $this->assertSame(
+            ['name' => 'Gift wrap', 'amount' => '2', 'taxable' => true, 'tax_class' => 'reduced-rate'],
+            json_decode($wrap['body'], true)
+        );
+        $this->assertSame(['name' => 'Handling', 'amount' => '1.5', 'taxable' => false], json_decode($handling['body'], true));
+    }
+
+    // --- addItem() with CoCart Plus choices ---
+
+    public function testAddItemSendsASubscriptionPlanAGiftRecipientAndAWarrantyAsCoCartPlusReadsThem(): void
+    {
+        $client = $this->createClient();
+        $client->cart()->addItem(306, 1, [
+            'convert_to_sub' => 'eefc3771-281d-41c7-8851-b9aa53d69233',
+            'recipient_email' => 'friend@example.com',
+            'item_data' => ['warranty' => '1-year'],
+        ]);
+
+        $request = $this->mockAdapter->getLastRequest();
+        $this->assertStringEndsWith('/cocart/v2/cart/add-item', $request['url']);
+        $this->assertSame([
+            'id' => '306',
+            'quantity' => '1',
+            'convert_to_sub' => 'eefc3771-281d-41c7-8851-b9aa53d69233',
+            'recipient_email' => 'friend@example.com',
+            'item_data' => ['warranty' => '1-year'],
+        ], json_decode($request['body'], true));
+    }
+
+    // --- changePlan() (CoCart Plus) ---
+
+    public function testChangePlanSwitchesTheItemThroughCartUpdateWithTheUpdateItemSchemaCallback(): void
+    {
+        $this->mockAdapter->queueResponse(200, [], '{"cart_key":"ck_1","notices":{"success":["Subscription option changed."]}}');
+
+        $client = $this->createClient();
+        $response = $client->cart()->changePlan('abc123', '3f16d144-7f4c-4a5c-8c00-031f3df22da6');
+
+        $request = $this->mockAdapter->getLastRequest();
+        $this->assertSame('POST', $request['method']);
+        $this->assertStringEndsWith('/cocart/v2/cart/update', $request['url']);
+        $this->assertSame([
+            'namespace' => 'update-item-schema',
+            'item_key' => 'abc123',
+            'convert_to_sub' => '3f16d144-7f4c-4a5c-8c00-031f3df22da6',
+        ], json_decode($request['body'], true));
+        $this->assertSame(['success' => ['Subscription option changed.']], $response->getNotices());
+    }
+
+    public function testChangePlanSendsZeroToSwitchToOneTime(): void
+    {
+        $client = $this->createClient();
+        $client->cart()->changePlan('abc123', '0');
+
+        $this->assertSame('0', json_decode($this->mockAdapter->getLastRequest()['body'], true)['convert_to_sub']);
+    }
+
+    public function testChangePlanRejectsAMissingItemKeyWithoutARequest(): void
+    {
+        $client = $this->createClient();
+
+        try {
+            $client->cart()->changePlan('', '0');
+            $this->fail('Expected a ValidationException');
+        } catch (ValidationException $e) {
+            $this->assertSame('changePlan() requires an item key.', $e->getMessage());
+        }
+
+        $this->assertSame([], $this->mockAdapter->getRequests());
+    }
 }

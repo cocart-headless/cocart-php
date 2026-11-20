@@ -261,13 +261,18 @@ class Response implements \ArrayAccess
     }
 
     /**
-     * Get notices from response
+     * Get notices from response, keyed by type (`success`, `error`, `notice`, `info`)
      *
-     * @return array
+     * For example `['success' => ['Item added to cart.']]`. Empty when there
+     * are none (CoCart Starter 5 sends `{}`, CoCart 4.x `[]`).
+     *
+     * @return array<string, string[]>
      */
     public function getNotices(): array
     {
-        return $this->get('notices', []);
+        $notices = $this->get('notices', []);
+
+        return is_array($notices) && !array_is_list($notices) ? $notices : [];
     }
 
     /**
@@ -311,23 +316,75 @@ class Response implements \ArrayAccess
     }
 
     /**
-     * Get shipping methods from response
+     * Get the cart's shipping packages, each with its rates
      *
-     * @return array
+     * CoCart sends them keyed by package ID under `shipping.packages`; this
+     * returns them as a list. A list (older or filtered responses) is
+     * returned as is.
+     *
+     * @return list<array<string, mixed>>
      */
     public function getShippingMethods(): array
     {
-        return $this->get('shipping', []);
+        $shipping = $this->get('shipping');
+
+        if (!is_array($shipping)) {
+            return [];
+        }
+
+        if (array_is_list($shipping)) {
+            return $shipping;
+        }
+
+        $packages = $shipping['packages'] ?? [];
+
+        return is_array($packages) ? array_values($packages) : [];
     }
 
     /**
-     * Get cart fees from response
+     * Get the cart's whole `shipping` field: the package count, whether
+     * shipping has been calculated, and the packages keyed by package ID
      *
-     * @return array
+     * @return array{
+     *     total_packages?: int,
+     *     show_package_details?: bool,
+     *     has_calculated_shipping?: bool,
+     *     packages?: array<string, array<string, mixed>>
+     * }|null Null when the response has no shipping field
+     */
+    public function getShipping(): ?array
+    {
+        $shipping = $this->get('shipping');
+
+        return is_array($shipping) && $shipping !== [] && !array_is_list($shipping) ? $shipping : null;
+    }
+
+    /**
+     * Get cart fees from response, as a list
+     *
+     * The cart keys fees by fee ID (`{}` when there are none; `[]` from
+     * CoCart 4.x).
+     *
+     * @return list<array<string, mixed>>
      */
     public function getFees(): array
     {
-        return $this->get('fees', []);
+        $fees = $this->get('fees', []);
+
+        return is_array($fees) ? array_values($fees) : [];
+    }
+
+    /**
+     * Get the cart's `extensions`: data plugins add to the cart, such as
+     * subscription `recurring_totals` (see docs/extension-data.md)
+     *
+     * @return array<string, mixed> Empty when there is none
+     */
+    public function getExtensions(): array
+    {
+        $extensions = $this->get('extensions', []);
+
+        return is_array($extensions) && !array_is_list($extensions) ? $extensions : [];
     }
 
     /**
@@ -409,6 +466,30 @@ class Response implements \ArrayAccess
     public function isNotModified(): bool
     {
         return $this->statusCode === 304;
+    }
+
+    /**
+     * Get the `RateLimit-*` headers (CoCart Plus, when rate limiting is on)
+     *
+     * Each value is null when the header wasn't sent.
+     *
+     * @return array{limit: int|null, remaining: int|null, reset: int|null, retry_after: int|null}
+     *         `reset` is the Unix time the window resets; `retry_after` the
+     *         seconds to wait, on a 429
+     */
+    public function getRateLimit(): array
+    {
+        $number = function (string $name): ?int {
+            $value = $this->getHeader($name);
+            return $value !== null && is_numeric($value) ? (int) $value : null;
+        };
+
+        return [
+            'limit' => $number('RateLimit-Limit'),
+            'remaining' => $number('RateLimit-Remaining'),
+            'reset' => $number('RateLimit-Reset'),
+            'retry_after' => $number('RateLimit-Retry-After'),
+        ];
     }
 
     /**

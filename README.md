@@ -80,9 +80,11 @@ $cart = $client->cart()->get();
 | [Cart](docs/cart.md) | Add/update/remove items, coupons, customer details, shipping, payment, fees, totals |
 | [Products](docs/products.md) | List/search/filter products, pagination, variations, categories, tags, attributes, reviews |
 | [Sessions](docs/sessions.md) | Admin sessions API, SessionManager, storage adapters, cart transfer on login |
-| [Account](docs/account.md) | Customer profile, password, order history, downloads, and reviews (supported by the SDK, not yet released in the CoCart plugin) |
-| [Error Handling](docs/error-handling.md) | Exception hierarchy, catching errors, HTTP status mapping, response error helpers |
+| [Account](docs/account.md) | Registration, customer profile, password, address, order history, downloads, reviews and subscriptions (supported by the SDK, not yet released in the CoCart plugin) |
+| [Checkout](docs/checkout.md) | Place orders and take payment, 3D Secure, wallets and vouchers, saved cards, the thank-you page, paying for unpaid orders, finding out how a checkout ended (CoCart Plus 2.0) |
+| [Error Handling](docs/error-handling.md) | Exception hierarchy, catching errors, HTTP status mapping, response error helpers, expired carts, rate limits |
 | [Utilities](docs/utilities.md) | Currency and timezone utilities helpers that operate on data already returned by the API. |
+| [Extension Data](docs/extension-data.md) | Plugin data under `extensions` (CoCart Plus integrations), and sending a plan, gift or warranty choice |
 
 ## Configuration
 
@@ -100,12 +102,42 @@ $client = new CoCart('https://your-store.com', [
     'verify_ssl'        => true,
     'rest_prefix'       => 'wp-json',                // Custom REST prefix
     'namespace'         => 'cocart',                 // Custom namespace - Only supported if you have the WhiteLabel add-on
-    'main_plugin'       => 'basic',                   // 'basic' (default) or 'legacy' for CoCart Community plugin
+    'main_plugin'       => 'starter',                 // 'starter' (default) or 'legacy' for CoCart Community plugin
     'etag'              => true,                     // ETag conditional requests (default true)
     'auto_storage'      => true,                     // Auto-persist cart key to $_SESSION
     'session_key'       => 'cocart_cart_key',        // Session key name
 ]);
 ```
+
+On a server, make **one client per customer**: a client holds one cart key, one login and the last response, so sharing it between customers (in a long-running worker, for example) would mix up their carts.
+
+## Checkout at a Glance
+
+> Requires CoCart Plus 2.0. See [Checkout](docs/checkout.md) for the whole flow.
+
+1. Call `$client->checkout()->get()` for the page the customer reviews: CoCart Plus remembers the total it showed (don't call it just before placing the order). Save their input with `update()`, and show what's in `result.not_applied`.
+2. Place the order with the gateway's token. `payment_data` carries gateway tokens only, never card details:
+
+```php
+$result = $client->checkout()->placeOrder([
+    'billing_address' => [...],
+    'payment_method'  => 'stripe',
+    'payment_data'    => ['wc-stripe-payment-method' => $paymentMethodId],
+]);
+```
+
+3. Read the `CheckoutResult` (`getCode()` is `order_placed`, `action_required`, `payment_pending` or `payment_failed`):
+
+| Result | What to do |
+|---|---|
+| `isComplete()` | Show `getOrderReceived($result->getOrderId(), $result->getOrderKey())` |
+| `isAwaitingPayment()` | The order is placed; the customer pays with the gateway's SDK (a wallet, a voucher, BLIK) |
+| `needsConfirmation()` | Confirm `getClientSecret()` in the page, then make the same call again |
+| `needsRedirect()` | Send the customer to `getRedirectUrl()`, then call `confirmReturn()` |
+| `isPending()` | Confirm again shortly |
+| `isFailed()` | Show `getMessage()` (plain text: escape it), then pay again with `payForOrder()` |
+
+A lost answer or `409 cocart_payment_in_progress` throws `CheckoutOutcomeUnknownException`: ask `getStatus($e->getCheckoutId())`, whose `code` is `order_placed`, `payment_required` (pay with `payForOrder()`), `in_progress` (ask again) or `not_placed` (place it again). `409 cocart_checkout_total_mismatch` means the total changed: get the checkout again and show the new total.
 
 ## CoCart Channels
 

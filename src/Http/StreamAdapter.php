@@ -75,8 +75,9 @@ class StreamAdapter implements HttpAdapterInterface
         restore_error_handler();
 
         if ($responseBody === false) {
+            // PHP's warning names the request URL, whose query string can carry the cart key.
             throw new CoCartException(
-                "Stream HTTP Error: " . ($errorMessage ?? 'Failed to connect')
+                "Stream HTTP Error: " . SafeErrorMessage::from($errorMessage ?? 'Failed to connect')
             );
         }
 

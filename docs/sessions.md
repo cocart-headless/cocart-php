@@ -63,6 +63,10 @@ $storage = new PhpSessionStorage();
 $session = new SessionManager($client, $storage);
 ```
 
+The cart key is restored when the objects are created, so a page load picks up the cart from the previous one: `SessionManager` reads it from its storage, and the client on its own reads it from `$_SESSION` (the `auto_storage` option, on by default). There's no separate restore call.
+
+If the stored cart no longer exists (CoCart Starter 5 answers `cocart_invalid_cart`, for example after the cart expired), the client forgets the key and retries the request once as a new guest. The client updates `$_SESSION` itself; with a `SessionManager` storage adapter, save the new key with `$session->setCartKey($client->getCartKey())`.
+
 ### Initialize a Cart
 
 Creates a guest cart and persists the cart key:

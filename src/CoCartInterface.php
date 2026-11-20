@@ -85,11 +85,13 @@ interface CoCartInterface
      * @param string     $method HTTP method
      * @param string     $route  Full REST route relative to wp-json/
      * @param array      $params Query parameters
-     * @param array|null $data   Request body data
+     * @param array|null $data    Request body data
+     * @param array      $options Request options:
+     *                            - omit_cart_key: bool (don't send the cart key, for routes that refuse one)
      * @return Response
      * @throws CoCartException
      */
-    public function requestRaw(string $method, string $route, array $params = [], ?array $data = null): Response;
+    public function requestRaw(string $method, string $route, array $params = [], ?array $data = null, array $options = []): Response;
 
     // --- Cart key ---
 
@@ -308,14 +310,14 @@ interface CoCartInterface
     /**
      * Get the configured CoCart main plugin identifier
      *
-     * @return string 'basic' or 'legacy'
+     * @return string 'starter' or 'legacy'
      */
     public function getMainPlugin(): string;
 
     /**
      * Set the CoCart main plugin identifier
      *
-     * @param string $mainPlugin 'basic' or 'legacy'
+     * @param string $mainPlugin 'starter' or 'legacy'
      * @return static
      */
     public function setMainPlugin(string $mainPlugin): static;
@@ -327,7 +329,7 @@ interface CoCartInterface
      * @return void
      * @throws \CoCart\Exceptions\VersionException
      */
-    public function requiresBasic(string $method): void;
+    public function requiresStarter(string $method): void;
 
     /**
      * Set the authentication header name

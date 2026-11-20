@@ -44,7 +44,7 @@ class WordPressAdapter implements HttpAdapterInterface
 
         if (is_wp_error($response)) {
             throw new CoCartException(
-                "WordPress HTTP Error: " . $response->get_error_message()
+                "WordPress HTTP Error: " . SafeErrorMessage::from($response->get_error_message())
             );
         }
 

@@ -145,4 +145,58 @@ class ProductsEndpointTest extends TestCase
         $this->assertSame('GET', $request['method']);
         $this->assertStringContainsString('/products/reviews/mine', $request['url']);
     }
+
+    // --- shippingRates() (CoCart Plus) ---
+
+    public function testShippingRatesSendsQuantityAndVariationWithoutTheCartKeyTheRouteRefuses(): void
+    {
+        $this->mockAdapter->queueResponse(200, [], '{"packages":{}}');
+
+        $client = $this->createClient(['cart_key' => 't_guest']);
+        $client->products()->shippingRates(134, ['quantity' => 2, 'variation' => ['attribute_pa_color' => 'blue']]);
+
+        $request = $this->mockAdapter->getLastRequest();
+        $this->assertSame('GET', $request['method']);
+        $this->assertSame('/wp-json/cocart/v2/products/134/shipping-rates', parse_url($request['url'], PHP_URL_PATH));
+        parse_str((string) parse_url($request['url'], PHP_URL_QUERY), $query);
+        $this->assertSame(['quantity' => '2', 'variation' => ['attribute_pa_color' => 'blue']], $query);
+        $this->assertArrayNotHasKey('Cart-Key', $request['headers']);
+
+        // Other requests still carry the key.
+        $client->cart()->get();
+        $this->assertSame('t_guest', $this->mockAdapter->getLastRequest()['headers']['Cart-Key']);
+    }
+
+    public function testShippingRatesSendsItemDataAndEncodesASku(): void
+    {
+        $client = $this->createClient();
+        $client->products()->shippingRates('Woo beanie/1', ['item_data' => ['engraving' => 'JD']]);
+
+        $request = $this->mockAdapter->getLastRequest();
+        $this->assertSame('/wp-json/cocart/v2/products/Woo%20beanie%2F1/shipping-rates', parse_url($request['url'], PHP_URL_PATH));
+        $this->assertStringEndsWith('?item_data%5Bengraving%5D=JD', $request['url']);
+    }
+
+    public function testShippingRatesUsesTheConfiguredNamespace(): void
+    {
+        $client = $this->createClient(['namespace' => 'mystore']);
+        $client->products()->shippingRates(134);
+
+        $this->assertStringEndsWith('/wp-json/mystore/v2/products/134/shipping-rates', $this->mockAdapter->getLastRequest()['url']);
+    }
+
+    // --- createReview ---
+
+    public function testCreateReviewPostsToProductsReviews(): void
+    {
+        $this->mockAdapter->queueResponse(201, [], '{}');
+        $data = ['product_id' => 154, 'review' => 'Warm.', 'rating' => 5, 'reviewer' => 'Jane', 'reviewer_email' => 'jane@example.com'];
+
+        $client = $this->createClient();
+        $client->products()->createReview($data);
+
+        $request = $this->mockAdapter->getLastRequest();
+        $this->assertSame('POST /wp-json/cocart/v2/products/reviews', $request['method'] . ' ' . parse_url($request['url'], PHP_URL_PATH));
+        $this->assertSame($data, json_decode($request['body'], true));
+    }
 }

@@ -53,7 +53,7 @@ class Cart extends Endpoint
      */
     public function create(): Response
     {
-        $this->client->requiresBasic('cart()->create');
+        $this->client->requiresStarter('cart()->create');
         return $this->post('');
     }
 
@@ -89,15 +89,47 @@ class Cart extends Endpoint
      * server resolves a non-numeric `id` before falling back to a 404,
      * so this SDK doesn't restrict the type here either.
      *
-     * @param string|int $productId   Product/variation ID (number or numeric string), or a SKU
-     * @param int        $quantity    Quantity to add
-     * @param array      $options     Additional options:
-     *                                - variation: array (variation attributes)
-     *                                - item_data: array (custom item data)
-     *                                - email: string (customer billing email)
-     *                                - phone: string (customer billing phone)
-     *                                - price: string (override price)
-     *                                - return_item: bool (return only item details)
+     * Choices CoCart Plus takes for its supported plugins go in `$options`
+     * too: a subscription plan (`convert_to_sub`), a gift recipient
+     * (`recipient_email`) and a warranty (`item_data['warranty']`). Other
+     * plugins' fields pass through as given.
+     *
+     * ```php
+     * $product = $client->products()->find(306)->toArray();
+     * $monthly = current(array_filter(
+     *     $product['extensions']['subscription_schemes'] ?? [],
+     *     fn ($option) => $option['period'] === '/ month'
+     * ));
+     * $client->cart()->addItem(306, 1, ['convert_to_sub' => $monthly['value']]);
+     * ```
+     *
+     * @param string|int $productId Product/variation ID (number or numeric string), or a SKU
+     * @param int        $quantity  Quantity to add
+     * @param array{
+     *     variation?: array<string, string>,
+     *     item_data?: array<string, mixed>,
+     *     email?: string,
+     *     phone?: string,
+     *     price?: string,
+     *     return_item?: bool,
+     *     convert_to_sub?: string,
+     *     recipient_email?: string,
+     *     ...
+     * } $options Additional options:
+     *   - variation: variation attributes, e.g. ['attribute_pa_color' => 'blue']
+     *   - item_data: extra data saved on the item; items with different data are
+     *     separate lines. `item_data['warranty']` picks a WooCommerce Warranty
+     *     option (CoCart Plus): the option's `key` from the product's
+     *     `extensions.warranty.options`, or its index
+     *   - email: the customer's billing email
+     *   - phone: the customer's billing phone number
+     *   - price: a custom price for the item, where the store allows it (CoCart Plus)
+     *   - return_item: return the added item instead of the cart
+     *   - convert_to_sub: subscription plan (CoCart Plus), the `value` of one of
+     *     the product's `extensions.subscription_schemes` options ('0' for
+     *     one-time). Without it the product's default option applies
+     *   - recipient_email: Gifting for WooCommerce Subscriptions (CoCart Plus),
+     *     who receives the subscription
      * @return Response
      */
     public function addItem($productId, int $quantity = 1, array $options = []): Response
@@ -394,25 +426,77 @@ class Cart extends Endpoint
     }
 
     /**
-     * Apply a coupon to the cart
+     * Switch a cart item to another purchase option: a subscription plan, or
+     * one-time (requires CoCart Plus)
      *
-     * @param string $couponCode The coupon code
+     * Pass the `value` of one of the item's `extensions.subscription_schemes`
+     * options; '0' is one-time. Returns the updated cart, with a notice
+     * saying the option changed.
+     *
+     * @param string $itemKey The cart item's key
+     * @param string $value   The option's `value`
      * @return Response
+     * @throws ValidationException If the item key is empty
      */
-    public function applyCoupon(string $couponCode): Response
+    public function changePlan(string $itemKey, string $value): Response
     {
-        return $this->post('apply-coupon', ['coupon' => $couponCode]);
+        if ($itemKey === '') {
+            throw new ValidationException('changePlan() requires an item key.', 400, 'cocart_missing_item_key');
+        }
+
+        return $this->update([
+            'namespace' => 'update-item-schema',
+            'item_key' => $itemKey,
+            'convert_to_sub' => $value,
+        ]);
     }
 
     /**
-     * Remove a coupon from the cart
+     * Apply a coupon to the cart (requires CoCart Plus)
+     *
+     * Pass the customer's `$email` for coupons restricted to certain emails
+     * when the cart doesn't know it yet.
+     *
+     * @param string      $couponCode The coupon code
+     * @param string|null $email      The customer's email, for email-restricted coupons
+     * @return Response
+     */
+    public function applyCoupon(string $couponCode, ?string $email = null): Response
+    {
+        // CoCart Plus's apply-coupon route takes `code` (`coupon` is rejected as a missing parameter).
+        $data = ['code' => $couponCode];
+
+        if ($email !== null && $email !== '') {
+            $data['email'] = $email;
+        }
+
+        return $this->post('apply-coupon', $data);
+    }
+
+    /**
+     * Remove a coupon from the cart (requires CoCart Plus)
+     *
+     * The code goes in the URL path, so it's encoded: codes can contain
+     * spaces, `%`, `#`, `?` and other characters. A code containing `/`
+     * can't be removed by code (CoCart Plus matches any path segment without
+     * `/`); `removeCoupons()` removes all of them instead.
      *
      * @param string $couponCode The coupon code
      * @return Response
      */
     public function removeCoupon(string $couponCode): Response
     {
-        return $this->delete("coupons/{$couponCode}");
+        return $this->delete('coupons/' . rawurlencode($couponCode));
+    }
+
+    /**
+     * Remove every coupon from the cart (requires CoCart Plus)
+     *
+     * @return Response
+     */
+    public function removeCoupons(): Response
+    {
+        return $this->delete('coupons');
     }
 
     /**
@@ -535,20 +619,28 @@ class Cart extends Endpoint
     }
 
     /**
-     * Add a fee to the cart
+     * Add a fee to the cart (requires CoCart Plus)
      *
-     * @param string $name    Fee name
-     * @param float  $amount  Fee amount
-     * @param bool   $taxable Whether the fee is taxable
+     * @param string      $name     Fee name
+     * @param float       $amount   Fee amount
+     * @param bool        $taxable  Whether the fee is taxable
+     * @param string|null $taxClass The tax class to use when the fee is taxable
      * @return Response
      */
-    public function addFee(string $name, float $amount, bool $taxable = false): Response
+    public function addFee(string $name, float $amount, bool $taxable = false, ?string $taxClass = null): Response
     {
-        return $this->post('add-fee', [
+        // CoCart Plus takes the amount as a string (a number is rejected as rest_invalid_param).
+        $data = [
             'name' => $name,
-            'amount' => $amount,
+            'amount' => (string) $amount,
             'taxable' => $taxable,
-        ]);
+        ];
+
+        if ($taxClass !== null && $taxClass !== '') {
+            $data['tax_class'] = $taxClass;
+        }
+
+        return $this->post('add-fee', $data);
     }
 
     /**
@@ -582,13 +674,38 @@ class Cart extends Endpoint
     }
 
     /**
-     * Check if coupons applied are still valid
+     * Check if coupons applied are still valid (requires CoCart Plus)
+     *
+     * @param string|null $email The customer's email, to check email restrictions
+     * @return Response
+     */
+    public function checkCoupons(?string $email = null): Response
+    {
+        $params = $email !== null && $email !== '' ? ['email' => $email] : [];
+        return $this->get('coupons/validate', $params);
+    }
+
+    /**
+     * Get a lighter cart response for a mini cart (requires CoCart Plus)
+     *
+     * @param array $params Query parameters
+     * @return Response
+     */
+    public function getMini(array $params = []): Response
+    {
+        return parent::get('mini', $params);
+    }
+
+    /**
+     * Remove every item but keep the cart's coupons, fees and customer
+     * details (requires CoCart Plus, `DELETE /cart/items`). `clear()` empties
+     * the whole cart.
      *
      * @return Response
      */
-    public function checkCoupons(): Response
+    public function removeAllItems(): Response
     {
-        return $this->get('coupons/validate');
+        return $this->delete('items');
     }
 
     /**

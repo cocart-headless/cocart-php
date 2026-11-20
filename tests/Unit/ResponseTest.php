@@ -147,6 +147,94 @@ class ResponseTest extends TestCase
         $this->assertSame(3, $response->getItemCount());
     }
 
+    // --- Cart shapes CoCart sends (recorded from CoCart Starter 5) ---
+
+    private function recordedCart(): Response
+    {
+        return new Response(200, [], (string) file_get_contents(__DIR__ . '/../fixtures/cart.json'));
+    }
+
+    public function testGetShippingMethodsListsThePackagesFromShippingPackages(): void
+    {
+        $response = $this->recordedCart();
+
+        $packages = $response->getShippingMethods();
+        $this->assertCount(1, $packages);
+        $this->assertTrue(array_is_list($packages));
+        $this->assertSame('Shipment', $packages[0]['package_name']);
+        $this->assertArrayHasKey('flat_rate:1', $packages[0]['rates']);
+    }
+
+    public function testGetShippingReturnsTheWholeShippingField(): void
+    {
+        $shipping = $this->recordedCart()->getShipping();
+
+        $this->assertSame(2, $shipping['total_packages']);
+        $this->assertTrue($shipping['has_calculated_shipping']);
+        $this->assertArrayHasKey('default', $shipping['packages']);
+    }
+
+    public function testGetShippingMethodsAcceptsAPlainListAndIsEmptyWithoutShipping(): void
+    {
+        $this->assertCount(1, (new Response(200, [], json_encode(['shipping' => [['package_name' => 'A']]])))->getShippingMethods());
+        $this->assertSame([], (new Response(200, [], '{"items":[]}'))->getShippingMethods());
+        $this->assertNull((new Response(200, [], '{"items":[]}'))->getShipping());
+    }
+
+    public function testGetFeesListsFeesKeyedByFeeIdAndIsEmptyForEmptyMaps(): void
+    {
+        $keyed = ['fees' => ['gift-wrap' => ['name' => 'Gift wrap', 'fee' => '500'], 'handling' => ['name' => 'Handling', 'fee' => '150']]];
+
+        $this->assertSame([
+            ['name' => 'Gift wrap', 'fee' => '500'],
+            ['name' => 'Handling', 'fee' => '150'],
+        ], (new Response(200, [], json_encode($keyed)))->getFees());
+        $this->assertSame([], (new Response(200, [], '{"fees":[]}'))->getFees());
+        $this->assertSame([], $this->recordedCart()->getFees());
+    }
+
+    public function testGetNoticesReturnsNoticesKeyedByType(): void
+    {
+        $response = new Response(200, [], '{"notices":{"success":["Item added"]}}');
+
+        $this->assertSame(['success' => ['Item added']], $response->getNotices());
+    }
+
+    public function testGetNoticesIsEmptyWhenThereAreNone(): void
+    {
+        // CoCart Starter 5 sends {}, CoCart 4.x sends [].
+        $this->assertSame([], $this->recordedCart()->getNotices());
+        $this->assertSame([], (new Response(200, [], '{"notices":[]}'))->getNotices());
+        $this->assertSame([], (new Response(200, [], '{"items":[]}'))->getNotices());
+    }
+
+    public function testGetExtensionsReturnsTheCartExtensionsAndIsEmptyForEmptyOrNone(): void
+    {
+        $recurring = ['abc' => ['totals' => ['period' => '/ month', 'subtotal' => '1000', 'total' => '1000']]];
+
+        $this->assertSame($recurring, (new Response(200, [], json_encode(['extensions' => ['recurring_totals' => $recurring]])))->getExtensions()['recurring_totals']);
+        $this->assertSame([], (new Response(200, [], '{"extensions":[]}'))->getExtensions());
+        $this->assertSame([], (new Response(200, [], '{"items":[]}'))->getExtensions());
+        $this->assertSame([], $this->recordedCart()->getExtensions());
+    }
+
+    // --- getRateLimit() ---
+
+    public function testGetRateLimitReadsTheRateLimitHeaders(): void
+    {
+        $response = new Response(200, ['RateLimit-Limit' => '25', 'ratelimit-remaining' => '24', 'RateLimit-Reset' => '1791108883'], '{}');
+
+        $this->assertSame(['limit' => 25, 'remaining' => 24, 'reset' => 1791108883, 'retry_after' => null], $response->getRateLimit());
+    }
+
+    public function testGetRateLimitIsAllNullWithoutTheHeaders(): void
+    {
+        $this->assertSame(
+            ['limit' => null, 'remaining' => null, 'reset' => null, 'retry_after' => null],
+            (new Response(200, [], '{}'))->getRateLimit()
+        );
+    }
+
     // --- getTaxes() / hasTaxes() ---
 
     public function testGetTaxesReturnsArrayAsIs(): void

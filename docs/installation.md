@@ -160,10 +160,13 @@ $client = new CoCart('https://your-store.com', [
     // API namespace (default: 'cocart')
     'namespace' => 'cocart',
 
-    // CoCart main plugin: 'basic' (default) or 'legacy'
-    'main_plugin' => 'basic',
+    // CoCart main plugin: 'starter' (default) or 'legacy'
+    'main_plugin' => 'starter',
 
-    // Retry transient failures (429, 503, timeouts)
+    // Retry transient failures: 429 for any request; 503 and timeouts for GETs only,
+    // so an order or a cart change is never sent twice. A 429 waits as long as
+    // RateLimit-Retry-After (or a proxy's Retry-After) says, up to 60 seconds.
+    // The checkout and account calls (requestRaw()) are never sent again.
     'max_retries' => 2,
 
     // ETag conditional requests (default: true)

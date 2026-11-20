@@ -11,7 +11,19 @@ $products = $client->products();
 ```php
 $response = $client->products()->all();
 $response = $client->products()->all(['per_page' => '20', 'page' => '1']);
+
+// The list is under `products`, with the page count alongside
+$products = $response->get('products', []);
+$totalPages = $response->get('total_pages');
 ```
+
+Product responses carry a lot for headless pages (related products, embedded variations with price and stock, upsells, cross-sells, stock, extension meta). For a listing that needs less, ask for just those fields; CoCart then skips building the rest:
+
+```php
+$response = $client->products()->all(['per_page' => '20', '_fields' => 'id,name,slug,prices,images,add_to_cart']);
+```
+
+Prices are minor-unit strings under `prices` (`'1800'` for 18.00; see `CurrencyFormatter` in [Utilities](utilities.md)), image `src` is a map of sizes (`thumbnail`, `medium`, `full`…), and `attributes` is keyed by attribute (`attribute_pa_color`).
 
 ## Parameters Reference
 
@@ -30,7 +42,7 @@ All list methods accept an optional `$params` array with these query parameters:
 | `min_price` | string | Minimum price |
 | `max_price` | string | Maximum price |
 | `stock_status` | string | Stock status (`instock`, `outofstock`, `onbackorder`) |
-| `orderby` | string | Sort field (`date`, `id`, `title`, `slug`, `price`, `popularity`, `rating`) |
+| `orderby` | string | Sort order: `date`, `id`, `menu_order`, `include`, `title`, `slug`, `name`, `alphabetical`, `reverse_alpha`, `popularity`, `sales`, `rating`, `review_count`, `by_stock`, `on_sale_first`, `featured_first`, `price_asc`, `price_desc`; `relevance` and `rand` need CoCart Starter |
 | `order` | string | Sort direction (`asc`, `desc`) |
 
 ## Filtering
@@ -43,8 +55,7 @@ $response = $client->products()->byCategory('electronics');
 // With additional params
 $response = $client->products()->byCategory('electronics', [
     'per_page' => '20',
-    'orderby' => 'price',
-    'order' => 'asc',
+    'orderby' => 'price_asc',
 ]);
 ```
 
@@ -128,11 +139,11 @@ $response = $client->products()->paginate(2, 12);
 ### Sort Helper
 
 ```php
-// Cheapest first
-$response = $client->products()->sortBy('price');
+// Cheapest first (CoCart rejects plain 'price': use price_asc or price_desc)
+$response = $client->products()->sortBy('price_asc');
 
 // Most expensive first
-$response = $client->products()->sortBy('price', 'desc');
+$response = $client->products()->sortBy('price_desc');
 
 // Newest first
 $response = $client->products()->sortBy('date', 'desc');
@@ -144,7 +155,7 @@ $response = $client->products()->sortBy('popularity', 'desc');
 $response = $client->products()->sortBy('rating', 'desc');
 
 // Combine with other filters
-$response = $client->products()->sortBy('price', 'asc', [
+$response = $client->products()->sortBy('price_asc', 'asc', [
     'category' => 'electronics',
     'on_sale' => true,
 ]);
@@ -156,8 +167,7 @@ $response = $client->products()->sortBy('price', 'asc', [
 $response = $client->products()->all([
     'page' => '1',
     'per_page' => '10',
-    'orderby' => 'price',
-    'order' => 'asc',
+    'orderby' => 'price_asc',
 ]);
 ```
 
@@ -169,11 +179,12 @@ $perPage = 20;
 
 do {
     $response = $client->products()->paginate($page, $perPage);
-    $products = $response->toArray();
-    $totalPages = $response->getTotalPages();
+    $products = $response->get('products', []);
+    $totalPages = (int) $response->get('total_pages', 1);
 
     foreach ($products as $product) {
-        echo $product['name'] . ' - $' . $product['price'] . "\n";
+        // Minor units: '1800' is 18.00 in a two-decimal currency
+        echo $product['name'] . ' - ' . $product['prices']['price'] . "\n";
     }
 
     $page++;
@@ -194,7 +205,8 @@ $response = $client->products()->find('PCT-2024');
 
 $data = $response->toArray();
 echo $data['name'];
-echo $data['price'];
+echo $data['prices']['price'];        // minor units, e.g. '1800'
+echo $data['images'][0]['src']['medium'];
 echo $data['description'];
 ```
 
@@ -212,7 +224,7 @@ $response = $client->products()->findBySlug('blue-hoodie');
 $response = $client->products()->variations(123);
 
 foreach ($response->toArray() as $variation) {
-    echo $variation['id'] . ': ' . $variation['price'] . "\n";
+    echo $variation['id'] . ': ' . $variation['prices']['price'] . "\n";
 }
 ```
 
@@ -221,6 +233,27 @@ foreach ($response->toArray() as $variation) {
 ```php
 $response = $client->products()->variation(123, 456);
 ```
+
+## Shipping Rates for a Product
+
+> Requires the CoCart Plus plugin.
+
+Shipping rates for a product before it's added to the cart, priced for the store's (or the customer's) location. Pass a variation ID, or the parent with the variation's attributes:
+
+```php
+$response = $client->products()->shippingRates(154, ['quantity' => 2]);
+$response = $client->products()->shippingRates(134, [
+    'variation' => ['attribute_pa_color' => 'blue', 'attribute_logo' => 'Yes'],
+]);
+
+foreach ($response->get('packages', []) as $package) {
+    foreach ($package['rates'] as $rate) {
+        echo $rate['label'] . ': ' . $rate['cost'] . "\n"; // cost in minor units
+    }
+}
+```
+
+The request is sent without the cart key: the route prices a simulated cart and refuses one (`400 cocart_calculate_product_shipping_rates_cart_access_denied`). External and grouped products can't be priced (`400`).
 
 ## Categories
 
@@ -314,8 +347,7 @@ $response = $client->products()->byBrand('nike');
 // With additional params
 $response = $client->products()->byBrand('nike', [
     'per_page' => '20',
-    'orderby' => 'price',
-    'order' => 'asc',
+    'orderby' => 'price_asc',
 ]);
 ```
 
@@ -331,6 +363,18 @@ $response = $client->products()->reviews();
 
 ```php
 $response = $client->products()->productReviews(123);
+```
+
+### Post a Review
+
+```php
+$response = $client->products()->createReview([
+    'product_id' => 123,
+    'review' => 'Warm and well made.',
+    'rating' => 5,
+    'reviewer' => 'Jane',                  // guests
+    'reviewer_email' => 'jane@example.com',
+]);
 ```
 
 ### My Reviews
@@ -427,7 +471,7 @@ $products = $response->toObject();
 
 // Check success
 if ($response->isSuccessful()) {
-    foreach ($response->toArray() as $product) {
+    foreach ($response->get('products', []) as $product) {
         echo $product['name'] . "\n";
     }
 }
@@ -435,7 +479,7 @@ if ($response->isSuccessful()) {
 // Access nested data with dot notation
 $response = $client->products()->find(123);
 echo $response->get('name');
-echo $response->get('price');
+echo $response->get('prices.price');
 echo $response->get('categories.0.name');
 ```
 

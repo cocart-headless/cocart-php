@@ -75,6 +75,8 @@ $response = $client->cart()->addItem(123, 1, [
 ]);
 ```
 
+With CoCart Plus, the options also carry a subscription plan (`convert_to_sub`), a gift recipient (`recipient_email`) or a warranty (`item_data['warranty']`), and `changePlan($itemKey, $value)` switches a cart item's plan. See [Extension Data](extension-data.md#sending-the-customers-choices).
+
 ### Add a Variable Product
 
 ```php
@@ -205,6 +207,26 @@ $response = $client->cart()->clear();
 $response = $client->cart()->empty();
 ```
 
+### Remove All Items, Keep the Rest
+
+> Requires the CoCart Plus plugin.
+
+Removes every item but keeps the cart's coupons, fees and customer details (`DELETE /cart/items`):
+
+```php
+$response = $client->cart()->removeAllItems();
+```
+
+### Mini Cart
+
+> Requires the CoCart Plus plugin.
+
+A lighter cart response for a header or drawer:
+
+```php
+$response = $client->cart()->getMini();
+```
+
 ### Calculate Totals
 
 ```php
@@ -223,11 +245,13 @@ $response = $client->cart()->update([
 
 ### Get Totals
 
+> `getTotals()` is a separate request to its own totals endpoint, not part of a regular cart fetch. It returns the full breakdown WooCommerce calculates, including `cart_contents_total` and the taxes per tax rate (`shipping_taxes`, `cart_contents_taxes`, `fee_taxes`).
+
 ```php
-// Raw values
+// Minor-unit strings, like the cart: ['total' => '125500', ...]
 $response = $client->cart()->getTotals();
 
-// Formatted with currency (HTML)
+// Formatted with the currency: ['total' => '$1,255.00', ...]
 $response = $client->cart()->getTotals(true);
 ```
 
@@ -245,12 +269,18 @@ $response = $client->cart()->getItemCount();
 
 ```php
 $response = $client->cart()->applyCoupon('SUMMER20');
+
+// A coupon restricted to certain emails, before the cart knows the customer's
+$response = $client->cart()->applyCoupon('VIP10', 'jane@example.com');
 ```
 
 ### Remove a Coupon
 
 ```php
 $response = $client->cart()->removeCoupon('SUMMER20');
+
+// Remove every coupon
+$response = $client->cart()->removeCoupons();
 ```
 
 ### Get Applied Coupons
@@ -263,6 +293,9 @@ $response = $client->cart()->getCoupons();
 
 ```php
 $response = $client->cart()->checkCoupons();
+
+// Including email restrictions
+$response = $client->cart()->checkCoupons('jane@example.com');
 ```
 
 ## Customer Details
@@ -327,6 +360,17 @@ $response = $client->cart()->getCustomer();
 
 ```php
 $response = $client->cart()->getShippingMethods();
+
+// CoCart keys the packages by package ID under `shipping.packages`;
+// getShippingMethods() on the response lists them, each with its `rates`.
+foreach ($response->getShippingMethods() as $package) {
+    foreach ($package['rates'] as $rateId => $rate) {
+        echo $rate['label'] . ': ' . $rate['cost'] . "\n"; // cost in minor units, e.g. '500'
+    }
+}
+
+// The whole field: total_packages, has_calculated_shipping, packages
+$shipping = $response->getShipping();
 ```
 
 ### Set Shipping Method
@@ -365,6 +409,9 @@ $response = $client->cart()->calculate();
 
 ```php
 $response = $client->cart()->getFees();
+
+// The cart keys fees by fee ID; getFees() lists them: [['name' => 'Gift wrap', 'fee' => '500']]
+$fees = $response->getFees();
 ```
 
 ### Add a Fee
@@ -375,6 +422,9 @@ $response = $client->cart()->addFee('Rush Processing', 9.99);
 
 // Taxable fee
 $response = $client->cart()->addFee('Gift Wrapping', 4.99, true);
+
+// Taxable, with a tax class
+$response = $client->cart()->addFee('Gift Wrapping', 4.99, true, 'reduced-rate');
 ```
 
 ### Remove All Fees
@@ -401,11 +451,17 @@ Submit multiple write operations in a single HTTP request for better performance
 $response = $client->batch()
     ->add('cart/add-item', ['id' => '123', 'quantity' => '2'])
     ->add('cart/add-item', ['id' => '456', 'quantity' => '1'])
-    ->add('cart/apply-coupon', ['coupon' => 'SAVE10'])
+    ->add('cart/apply-coupon', ['code' => 'SAVE10'])
     ->execute();
 ```
 
-For cart-only requests, the server returns the final cart state with all notices merged.
+When every sub-request is a cart route, the server returns **one up-to-date cart** instead of one response per request: the cart from the last sub-request that succeeded, with every sub-request's notices merged. A sub-request that failed shows up as an `error` notice, so read the notices to see what didn't apply:
+
+```php
+$failed = $response->getNotices()['error'] ?? []; // e.g. ['Coupon "SAVE1O" does not exist!']
+```
+
+If every sub-request fails, or the batch mixes in other routes, the response is WordPress's standard batch list (`responses`, one per sub-request, with its own `status`).
 
 ### Available Methods
 
@@ -465,8 +521,15 @@ $cartKey = $response->getCartKey();
 // Cart hash
 $hash = $response->getCartHash();
 
-// Notices
+// Notices, keyed by type: ['success' => ['...'], 'error' => ['...']], or [] when there are none
 $notices = $response->getNotices();
+
+// Shipping packages as a list, and fees as a list (the cart keys both by ID)
+$packages = $response->getShippingMethods();
+$fees = $response->getFees();
+
+// Data plugins add to the cart, e.g. subscription recurring_totals (see extension-data.md)
+$extensions = $response->getExtensions();
 
 // Tax lines, normalized to a flat array of ['key' => ..., 'name' => ..., 'price' => ...]
 // regardless of whether the plugin returns 'taxes' as an array or a legacy
@@ -493,6 +556,8 @@ $json = $response->toJson();
 The SDK automatically handles ETags for reduced bandwidth and faster responses. This is enabled by default.
 
 When a response includes an `ETag` header, the SDK stores it in memory. On subsequent GET requests to the same URL, the SDK sends the stored ETag via the `If-None-Match` header. If the data hasn't changed, the server returns a `304 Not Modified` response with an empty body instead of the full payload.
+
+A response whose `Cache-Control` says `no-store` or `private` isn't kept: CoCart Plus marks its checkout, order and account responses that way, since they hold a customer's details.
 
 ```php
 $client = new CoCart('https://your-store.com');
