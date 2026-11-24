@@ -46,7 +46,7 @@ It returns the new customer; log in next. The username and password are sent as 
 
 ### Documents and Results
 
-Account calls return documents: a customer, an order, a subscription. Each has `object` (`'customer'`, `'order'`, `'subscription'`) and `actions` (what can be done next). A call that changes something also carries `result`, with a `code` to branch on and a `message` for the customer:
+Account calls return documents: a customer, an order, a subscription. Each has `object` (`'customer'`, `'order'`, `'subscription'`); an order or subscription also has `allowed_actions` (the names of what the customer may do with it now, e.g. `'pay'` or `'cancel'`). A call that changes something also carries `result`, with a `code` to branch on and a `message` for the customer:
 
 ```php
 $response = $client->account()->updateProfile(['account_first_name' => 'Jane']);
@@ -66,6 +66,7 @@ $response = $client->account()->getProfile(['formatted' => true]);
 $response->get('email');
 $response->get('billing');
 $response->get('stats.orders_count');
+$response->get('recent_orders'); // the 5 most recent orders, newest first: id, number, status, date_created, total, href
 ```
 
 ### Update Profile
@@ -164,8 +165,8 @@ $response = $client->account()->getOrderDownloads(123);
 // For a guest order
 $response = $client->account()->getGuestOrderDownloads(123, 'jane@example.com');
 
-foreach ($response->get('downloads', []) as $download) {
-    echo $download['download_name'] . "\n";
+foreach ($response->toArray() as $download) {
+    echo $download['name'] . "\n"; // also downloads_remaining (null when unlimited), expires, product, order and href
 }
 ```
 
@@ -173,7 +174,7 @@ foreach ($response->get('downloads', []) as $download) {
 
 ```php
 $response = $client->account()->getDownloads();
-$response->get('downloads');
+$response->toArray(); // the list of downloads, in the same shape
 ```
 
 ### Get Reviews

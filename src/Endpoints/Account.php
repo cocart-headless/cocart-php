@@ -80,7 +80,7 @@ class Account extends Endpoint
     // MARK: - Profile
 
     /**
-     * Get the signed-in customer: name, email, addresses, order stats and `actions`
+     * Get the signed-in customer: name, email, addresses and order stats
      *
      * @param array $params Optional: `formatted` (bool), `meta_keys` (a list of meta keys to include)
      * @return Response
@@ -213,7 +213,7 @@ class Account extends Endpoint
      * Get the files one of the customer's orders can download
      *
      * @param int $id Order ID
-     * @return Response `{downloads: [...]}`
+     * @return Response The list of downloads
      * @throws CoCartException
      */
     public function getOrderDownloads(int $id): Response
@@ -226,7 +226,7 @@ class Account extends Endpoint
      *
      * @param int    $id    Order ID
      * @param string $email Billing email used when placing the order
-     * @return Response `{downloads: [...]}`
+     * @return Response The list of downloads
      * @throws CoCartException
      */
     public function getGuestOrderDownloads(int $id, string $email): Response
@@ -237,7 +237,7 @@ class Account extends Endpoint
     /**
      * Get every file the customer can download
      *
-     * @return Response `{downloads: [...]}`
+     * @return Response The list of downloads
      * @throws CoCartException
      */
     public function getDownloads(): Response

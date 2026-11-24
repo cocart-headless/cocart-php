@@ -39,7 +39,7 @@ class Checkout
      * The checkout as it stands, like a receipt
      *
      * Items, coupons, fees, `totals` and `total_lines`, the payment method,
-     * the addresses, each shipping package with its rates, and `actions`.
+     * the addresses, and each shipping package with its rates.
      * Call it for the page the customer reviews before paying: CoCart Plus
      * remembers the total it showed, and refuses the order if the total has
      * changed by then (`409 cocart_checkout_total_mismatch`). Don't call it
@@ -196,8 +196,8 @@ class Checkout
     }
 
     /**
-     * The payment methods for this cart: `{payment_methods: [...]}`, each with
-     * its `id`, `title`, `supports` and a logged-in customer's `saved_tokens`
+     * The payment methods for this cart: a list, each with its `id`, `title`,
+     * `supports` and a logged-in customer's `saved_tokens`
      *
      * @return Response
      * @throws CoCartException
@@ -222,8 +222,8 @@ class Checkout
      */
     public function getSavedPaymentMethods(?string $gatewayId = null): array
     {
-        $response = $this->getPaymentMethods()->toArray();
-        $methods = is_array($response['payment_methods'] ?? null) ? $response['payment_methods'] : [];
+        $methods = $this->getPaymentMethods()->toArray();
+        $methods = array_is_list($methods) ? $methods : [];
         $cards = [];
 
         foreach ($methods as $method) {

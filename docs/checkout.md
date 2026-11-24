@@ -192,7 +192,7 @@ $config->get('store.privacy_url');
 The payment methods the customer can use for this cart:
 
 ```php
-foreach ($client->checkout()->getPaymentMethods()->get('payment_methods', []) as $method) {
+foreach ($client->checkout()->getPaymentMethods()->toArray() as $method) {
     echo $method['id'];          // 'stripe'
     echo $method['title'];       // 'Credit card'
     echo $method['description'];

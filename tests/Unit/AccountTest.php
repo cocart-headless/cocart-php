@@ -215,11 +215,15 @@ class AccountTest extends TestCase
 
     public function testGetOrderDownloadsCallsTheOrdersDownloadsRoute(): void
     {
-        $body = ['downloads' => [[
-            'product_name'        => 'Album',
-            'download_name'       => 'MP3',
-            'downloads_remaining' => '3',
-        ]]];
+        $body = [[
+            'id'                  => 'abc',
+            'name'                => 'MP3',
+            'downloads_remaining' => 3,
+            'expires'             => null,
+            'product'             => ['id' => 15, 'name' => 'Album'],
+            'order'               => ['id' => 123, 'number' => '123'],
+            'href'                => 'https://store.example.com/?download_file=15',
+        ]];
         $this->mockAdapter->queueResponse(200, [], json_encode($body));
 
         $client = $this->createClient(['username' => 'user', 'password' => 'pass']);
@@ -236,7 +240,7 @@ class AccountTest extends TestCase
 
     public function testGetGuestOrderDownloadsSendsTheBillingEmailToTheSameRoute(): void
     {
-        $this->mockAdapter->queueResponse(200, [], '{"downloads":[]}');
+        $this->mockAdapter->queueResponse(200, [], '[]');
 
         $client = $this->createClient();
         $response = $client->account()->getGuestOrderDownloads(123, 'jane@example.com');
@@ -245,7 +249,7 @@ class AccountTest extends TestCase
             'https://store.example.com/wp-json/cocart/v2/my-account/orders/123/downloads?email=jane%40example.com',
             $this->mockAdapter->getLastRequest()['url']
         );
-        $this->assertSame(['downloads' => []], $response->toArray());
+        $this->assertSame([], $response->toArray());
     }
 
     // --- getDownloads ---
